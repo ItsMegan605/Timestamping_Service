@@ -1,3 +1,11 @@
+#include "../header_files/common.h"
+#include "../header_files/crypto.h"
+
+#include <iostream>
+#include <thread>
+#include <vector>
+using namespace std;
+
 /**
  * server.cpp - Timestamping Service Server (Main).
  * 
@@ -42,10 +50,7 @@
  * TODO: Join all threads on shutdown (or detach them).
  */
 
-#include <thread>
-#include <vector>
-#include <iostream>
-//...
+
 
 
 int main(int argc, char* argv[]) {

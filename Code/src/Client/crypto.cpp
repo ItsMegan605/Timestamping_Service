@@ -32,3 +32,21 @@
  *   - Set session caching off for simplicity.
  */
 
+#include <stdio.h>
+#include <string.h>
+#include <openssl/err.h>
+#include <openssl/obj_mac.h>
+
+int generate_handshake_ephimeral () {
+    //diffici hellman elliètic curve generation
+}
+
+int export_public_key () {
+
+}
+
+int nonce_generation() {
+    
+}
+
+

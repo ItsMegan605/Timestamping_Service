@@ -1,3 +1,10 @@
+
+
+#include "../header_files/common.h"
+#include "../header_files/crypto.h"
+
+using namespace std;
+
 /**
  * client.cpp - Timestamping Service Client (Main).
  * 
@@ -33,9 +40,20 @@
  * TODO: Close the connection, free SSL objects, clean up.
  */
 
-//includes
-
+#include <iostream>
 int main(int argc, char* argv[]) {
-    // TODO: Implement everything described above
-    return 0;
+cout << "Welcome to the service, please connect to the server first" << endl;
+
+int connection = server_connection(IP_ADDRESS,DEFAULT_PORT);
+if (connection < 0) {
+    cout << "error while connecting to the server" << endl;
+}
+
+//handshake with eèhimera keys 
+export_public_key() {
+
+}
+
+nonce_generation
+
 }
