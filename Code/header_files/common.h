@@ -17,5 +17,8 @@
 
 // TODO: Define Command enum (uint8_t): AUTH, TIMESTAMP, BALANCE
 // TODO: Define Status enum (uint8_t): SUCCESS, AUTH_FAILED, INSUFFICIENT_BALANCE, INVALID_COMMAND, INTERNAL_ERROR
+// Prototipi per la gestione delle connessioni di rete
+int server_connection(const char *ip, int port);
+int setup_server(int port);
 
 #endif // COMMON_H

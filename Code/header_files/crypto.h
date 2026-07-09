@@ -18,6 +18,9 @@
 #include <openssl/ssl.h>
 #include <openssl/evp.h>
 
+std::vector<uint8_t> generate_nonce(size_t length);
+EVP_PKEY* generate_ephemeral_key();
+
 // ---------- Hashing ----------
 // TODO: std::array<uint8_t, 32> sha256_file(const std::string& filename)
 // TODO: std::array<uint8_t, 32> sha256_data(const std::vector<uint8_t>& data)
