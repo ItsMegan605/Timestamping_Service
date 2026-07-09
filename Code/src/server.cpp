@@ -6,6 +6,23 @@
 #include <vector>
 using namespace std;
 
+void handle_client(int client_socket) {
+    // 1. Riceve ClientHello (Nc)
+    
+    // 2. Genera il proprio Nonce (Ns) e la propria chiave effimera (Epub_S)
+    EVP_PKEY* server_eph_key = generate_ephemeral_key();
+    
+    // 3. Firma (Nc || Ns || Epub_S) con privKc caricata all'avvio
+    
+    // 4. Invia ServerHello (Ns, Epub_S, Firma) al client
+    
+    // 5. Riceve ClientKeyExchange (Epub_C)
+    
+    // 6. Calcola derive_shared_secret(...) ed esegue HKDF
+    
+    // 7. Entra nel loop di servizio in attesa dei comandi (Auth, Timestamp, Balance)
+    // decifrando i payload con AES-GCM.
+}
 /**
  * server.cpp - Timestamping Service Server (Main).
  * 
