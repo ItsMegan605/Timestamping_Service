@@ -4,6 +4,7 @@
  * TODO: Include nlohmann/json.hpp (single header).
  * 
  * TODO: load_from_file():
+ *   - Lock mutex.
  *   - Open the JSON file, parse it.
  *   - Iterate over "users" object, extract fields.
  *   - Store in accounts_ map.
@@ -12,9 +13,10 @@
  * TODO: save_to_file():
  *   - Build a JSON object from accounts_.
  *   - Write to "users.json.tmp".
- *   - Rename "users.json" -> "users_backup.json" (overwrite).
- *   - Rename "users.json.tmp" -> "users.json".
- *   - Remove tmp file.
+ *   - Optionally call fsync() on the tmp file descriptor.
+ *   - Rename "users.json.tmp" -> "users.json" (this is atomic on POSIX systems).
+*    - Do NOT rename the original to a backup first – that can cause data loss.
+ *   - (Optional: keep a separate backup by copying the old file before writing).
  * 
  * TODO: authenticate():
  *   - Look up username. If not found, return false.

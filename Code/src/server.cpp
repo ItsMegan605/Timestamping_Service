@@ -1,5 +1,7 @@
 #include "../header_files/common.h"
 #include "../header_files/crypto.h"
+#include "../header_files/protocol.h"
+#include "../header_files/database.h"
 
 #include <iostream>
 #include <thread>
@@ -14,24 +16,29 @@
 using namespace std;
 
 void handle_client(int client_socket) {
-    // 1. Riceve ClientHello (Nc)
+    // 1. Riceve ClientHello (Nc) via recv_message() 
     
     // 2. Genera il proprio Nonce (Ns) e la propria chiave effimera (Epub_S)
     EVP_PKEY* server_eph_key = generate_ephemeral_key();
     
-    // 3. Firma (Nc || Ns || Epub_S) con privKc caricata all'avvio
+    // 3. Firma (Nc || Ns || Epub_S) con privKc caricata all'avvio (sign_data)
     
-    // 4. Invia ServerHello (Ns, Epub_S, Firma) al client
+    // 4. Invia ServerHello (Ns, Epub_S, Firma) al client tramite send_message()
     
-    // 5. Riceve ClientKeyExchange (Epub_C)
+    // 5. Riceve ClientKeyExchange (Epub_C) tramite recv_message()
     
-    // 6. Calcola derive_shared_secret(...) ed esegue HKDF
+    // 6. Calcola derive_shared_secret(...) ed esegue HKDF per ottenere chiavi AES 
     
-    // 7. Entra nel loop di servizio in attesa dei comandi (Auth, Timestamp, Balance)
-    // decifrando i payload con AES-GCM.
+    // 7. Ora il canale sicuro è stabilito. Entra nel loop di servizio: 
+    //    - Ricevi comandi cifrati con AES-GCM (usa recv_message + aes_gcm_decrypt)
+    //    - Il primo byte del payload decifrato è il Command (AUTH, TIMESTAMP, BALANCE)
+    //    - Gestisci ogni comando, usando il database per autenticare e gestire i timestamp.
+    //    - Invia risposte cifrate con send_message + aes_gcm_encrypt
 }
 
 int main() {
+    // Carica i key pair (pubKc, privKc, pubKts, privKts) dai PEM all'avvio
+    // Carica il database users.json all'avvio
     // Usa DEFAULT_PORT definito in common.h
     int server_fd = setup_server(DEFAULT_PORT);
     if (server_fd < 0) return EXIT_FAILURE;

@@ -1,9 +1,10 @@
 {
     "configurations": [
         {
-            "name": "Win32",
+            "name": "windows-clang-x64",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "C:\\Users\\eleni\\scoop\\apps\\openssl\\current\\include"
             ],
             "defines": [
                 "_DEBUG",

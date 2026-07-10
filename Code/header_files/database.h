@@ -4,9 +4,9 @@
  * TODO: Design a UserDatabase class that:
  *   - Loads users from "data/users.json" using nlohmann/json.
  *   - Authenticates username/password (salted SHA-256).
- *   - Consumes a timestamp (decrements remaining).
+ *   - Consumes a timestamp (increments consumed, decrements remaining).
  *   - Returns balance (consumed, remaining).
- *   - Saves atomically (write to .tmp, then rename, keeping a backup).
+ *   - Saves atomically (write to .tmp, then rename over the original).
  *   - Is thread-safe (mutex for concurrent access).
  */
 
@@ -31,10 +31,10 @@ public:
     ~UserDatabase() = default;
 
     // TODO: bool load_from_file(const std::string& path = "data/users.json")
-    // TODO: bool save_to_file(const std::string& path = "data/users.json") const
+    // TODO: bool save_to_file(const std::string& path = "data/users.json") 
 
     // TODO: bool authenticate(const std::string& username, const std::string& password) const
-    // TODO: bool consume_timestamp(const std::string& username)  // returns false if insufficient
+    // TODO: bool consume_timestamp(const std::string& username)  // returns false if quota exhausted
     // TODO: void get_balance(const std::string& username, uint32_t& consumed, uint32_t& remaining) const
 
 private:

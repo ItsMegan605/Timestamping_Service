@@ -1,12 +1,12 @@
 #include "../header_files/crypto.h"
-#include <openssl/evp.h>
 #include <openssl/ec.h>
 #include <openssl/err.h>
-#include <iostream>
 #include <openssl/rand.h>
+#include <iostream>
 #include <vector>
 #include <cstdint>
 #include <cstdlib>
+
 EVP_PKEY* generate_ephemeral_key() {
     // --- PHASE 1: Parameter Generation  ---
     EVP_PKEY* dh_params = NULL;
@@ -55,3 +55,15 @@ std::vector<uint8_t> generate_nonce(size_t length) {
     
     return nonce;
 }
+
+// ================================================================
+// TODO: Implement all other functions declared in crypto.h
+// ================================================================
+// - sha256_file / sha256_data        (use EVP_Digest)
+// - load_public_key / load_private_key  (use PEM_read_*)
+// - derive_shared_secret             (use EVP_PKEY_derive)
+// - hkdf_extract_expand              (use EVP_KDF or manual HMAC)
+// - aes_gcm_encrypt / decrypt        (use EVP_CipherInit_ex with AES-256-GCM)
+// - sign_data / verify_signature     (use EVP_Sign* / EVP_Verify*)
+// - sign_timestamp / verify_timestamp (same, but convert timestamp to big-endian)
+// ================================================================
