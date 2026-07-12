@@ -18,31 +18,26 @@
 #include <cstdint>
 #include "common.h"
 
-// ---------------------- handshake structs ------------------------------
+using namespace std;
 
-typedef struct {
-    unsigned char pubkey_ecdh[MAX_DH_PUBKEY_LEN];
-    size_t pubkey_ecdh_len;
-    unsigned char nonce[NONCE_SIZE];
-} handshakeClient;
 
-typedef struct {
-    unsigned char pubkey_ecdh[MAX_DH_PUBKEY_LEN];
-    size_t pubkey_ecdh_len;
-    unsigned char nonce[NONCE_SIZE];
-    unsigned char signature[MAX_SIGNATURE_LEN]; 
-    size_t signature_len;
-} handshakeServer;
+// ---------------------- handshake  ------------------------------
 
-/* not used for now
+vector<uint8_t> pack_client_hello(const vector<uint8_t>& epub_c, const vector<uint8_t>& nc);
+bool unpack_client_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_epub_c, vector<uint8_t>& out_nc);
+
+vector<uint8_t> pack_server_hello(const vector<uint8_t>& epub_s, const vector<uint8_t>& ns, const vector<uint8_t>& signature);
+bool unpack_server_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_epub_s, vector<uint8_t>& out_ns, vector<uint8_t>& out_signature);
+
+/* not used for now and //TODO: probably to remove
 // ---------- Request Structs ----------
 struct AuthRequest {
-    std::string username;
-    std::string password;
+    string username;
+    string password;
 };
 
 struct TimestampRequest {
-    std::array<uint8_t, 32> hash;  // SHA-256 hash of the document
+    array<uint8_t, 32> hash;  // SHA-256 hash of the document
 };
 
 // (Balance request has no payload, just the command byte)
@@ -54,9 +49,9 @@ struct AuthResponse {
 
 struct TimestampResponse {
     Status status; // OK, QUOTA_EXHAUSTED, or INTERNAL_ERROR
-    std::array<uint8_t, 32> hash;
+    array<uint8_t, 32> hash;
     uint64_t timestamp;                // Unix time in seconds (network byte order when sent)
-    std::vector<uint8_t> signature;    // Variable length (DER-encoded ECDSA/RSA signature)
+    vector<uint8_t> signature;    // Variable length (DER-encoded ECDSA/RSA signature)
 };
 
 struct BalanceResponse {
@@ -66,18 +61,18 @@ struct BalanceResponse {
 };
 
 // ---------- Serialization Functions (pack) ----------
-std::vector<uint8_t> pack_auth_request(const AuthRequest& req);
-std::vector<uint8_t> pack_timestamp_request(const TimestampRequest& req);
+vector<uint8_t> pack_auth_request(const AuthRequest& req);
+vector<uint8_t> pack_timestamp_request(const TimestampRequest& req);
 // Balance request is just the command byte, so no pack function needed
 
 // ---------- Deserialization Functions (unpack) ----------
-bool unpack_auth_response(const std::vector<uint8_t>& data, AuthResponse& out);
-bool unpack_timestamp_response(const std::vector<uint8_t>& data, TimestampResponse& out);
-bool unpack_balance_response(const std::vector<uint8_t>& data, BalanceResponse& out);
+bool unpack_auth_response(const vector<uint8_t>& data, AuthResponse& out);
+bool unpack_timestamp_response(const vector<uint8_t>& data, TimestampResponse& out);
+bool unpack_balance_response(const vector<uint8_t>& data, BalanceResponse& out);
 */
 
 // ---------- Raw I/O Helpers (over TCP socket, NOT SSL) ----------
-bool send_message(int socket_fd, const std::vector<uint8_t>& payload);
-bool recv_message(int socket_fd, std::vector<uint8_t>& out_payload);
+bool send_message(int socket_fd, const vector<uint8_t>& payload);
+bool recv_message(int socket_fd, vector<uint8_t>& out_payload);
 
 #endif // PROTOCOL_H

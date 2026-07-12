@@ -6,21 +6,24 @@
 #include <vector>
 #include <cstdint>
 #include <cstdlib>
+#include <openssl/pem.h>
+#include <cstdio> 
+
+using namespace std;
 
 EVP_PKEY* generate_ephemeral_key() {
-    // --- PHASE 1: Parameter Generation  ---
+    // --- PHASE 1: Parameter Generation (Curve selection) ---
     EVP_PKEY* dh_params = NULL;
     EVP_PKEY_CTX* ctx_params = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
     
     if (!ctx_params) {
-        std::cerr << "Error creating parameter context" << std::endl;
+        cerr << "Error creating parameter context" << endl;
         return NULL;
     }
 
     EVP_PKEY_paramgen_init(ctx_params);
     EVP_PKEY_CTX_set_ec_paramgen_curve_nid(ctx_params, NID_X9_62_prime256v1);
     EVP_PKEY_paramgen(ctx_params, &dh_params);
-    
     EVP_PKEY_CTX_free(ctx_params);
 
     // --- PHASE 2: Key Pair Generation ---
@@ -28,7 +31,7 @@ EVP_PKEY* generate_ephemeral_key() {
     EVP_PKEY_CTX* ctx_key = EVP_PKEY_CTX_new(dh_params, NULL);
     
     if (!ctx_key) {
-        std::cerr << "Error creating key context" << std::endl;
+        cerr << "Error creating key context" << endl;
         EVP_PKEY_free(dh_params);
         return NULL;
     }
@@ -37,67 +40,63 @@ EVP_PKEY* generate_ephemeral_key() {
     EVP_PKEY_keygen(ctx_key, &ephemeral_key);
     
     EVP_PKEY_CTX_free(ctx_key);
-
-    // We no longer need the parameters in this form once the key is generated
     EVP_PKEY_free(dh_params);
 
     return ephemeral_key;
 }
 
-std::vector<uint8_t> generate_nonce(size_t length) {
-    std::vector<uint8_t> nonce(length);
-    
-    // RAND_bytes restituisce 1 in caso di successo, 0 o -1 in caso di errore
+vector<uint8_t> generate_nonce(size_t length) {
+    vector<uint8_t> nonce(length);
     if (RAND_bytes(nonce.data(), length) != 1) {
-        std::cerr << "Errore critico: impossibile generare entropia per il nonce." << std::endl;
+        cerr << "Critical error: unable to generate entropy for nonce." << endl;
         exit(EXIT_FAILURE); 
     }
-    
     return nonce;
 }
 
-std::vector<uint8_t> serialize_pubkey(EVP_PKEY* pkey) {
+// Converts an EVP_PKEY object into a raw byte vector for network transmission
+vector<uint8_t> serialize_pubkey(EVP_PKEY* pkey) {
     unsigned char* buf = nullptr;
     int len = i2d_PUBKEY(pkey, &buf);
-    std::vector<uint8_t> result(buf, buf + len);
+    vector<uint8_t> result(buf, buf + len);
     OPENSSL_free(buf);
     return result;
 }
 
+// Converts a raw byte vector received from the network back into an EVP_PKEY object
+EVP_PKEY* deserialize_pubkey(const vector<uint8_t>& pubkey_bytes) {
+    const unsigned char* ptr = pubkey_bytes.data();
+    return d2i_PUBKEY(NULL, &ptr, pubkey_bytes.size());
+}
 
-std::vector<uint8_t> sign_data(const std::vector<uint8_t>& data, EVP_PKEY* priv_key) {
+vector<uint8_t> sign_data(const vector<uint8_t>& data, EVP_PKEY* priv_key) {
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     size_t sig_len;
 
-    // Initialize signing with SHA-256
     if (EVP_DigestSignInit(ctx, NULL, EVP_sha256(), NULL, priv_key) <= 0) {
-        // Handle error
+        // Error handling logic
     }
 
-    // Determine required signature buffer length
     if (EVP_DigestSign(ctx, NULL, &sig_len, data.data(), data.size()) <= 0) {
-        // Handle error
+        // Error handling logic
     }
 
-    std::vector<uint8_t> signature(sig_len);
-    // Execute signing
+    vector<uint8_t> signature(sig_len);
     if (EVP_DigestSign(ctx, signature.data(), &sig_len, data.data(), data.size()) <= 0) {
-        // Handle error
+        // Error handling logic
     }
 
     EVP_MD_CTX_free(ctx);
     return signature;
 }
 
-bool verify_signature(const std::vector<uint8_t>& data, 
-                    const std::vector<uint8_t>& signature, 
-                    EVP_PKEY* pub_key) {
+bool verify_signature(const vector<uint8_t>& data, const vector<uint8_t>& signature, EVP_PKEY* pub_key) {
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     bool result = false;
 
     if (EVP_DigestVerifyInit(ctx, NULL, EVP_sha256(), NULL, pub_key) > 0) {
         if (EVP_DigestVerify(ctx, signature.data(), signature.size(), data.data(), data.size()) == 1) {
-            result = true; // Signature is valid
+            result = true; 
         }
     }
     
@@ -105,14 +104,35 @@ bool verify_signature(const std::vector<uint8_t>& data,
     return result;
 }
 
-// ================================================================
-// TODO: Implement all other functions declared in crypto.h
-// ================================================================
-// - sha256_file / sha256_data        (use EVP_Digest)
-// - load_public_key / load_private_key  (use PEM_read_*)
-// - derive_shared_secret             (use EVP_PKEY_derive)
-// - hkdf_extract_expand              (use EVP_KDF or manual HMAC)
-// - aes_gcm_encrypt / decrypt        (use EVP_CipherInit_ex with AES-256-GCM)
-// - sign_data / verify_signature     (use EVP_Sign* / EVP_Verify*)
-// - sign_timestamp / verify_timestamp (same, but convert timestamp to big-endian)
-// ================================================================
+EVP_PKEY* load_private_key(const string& filepath) {
+    FILE* fp = fopen(filepath.c_str(), "r");
+    if (!fp) { cerr << "Error opening " << filepath << endl; return nullptr; }
+    EVP_PKEY* pkey = PEM_read_PrivateKey(fp, nullptr, nullptr, nullptr);
+    fclose(fp);
+    return pkey;
+}
+
+EVP_PKEY* load_public_key(const string& filepath) {
+    FILE* fp = fopen(filepath.c_str(), "r");
+    if (!fp) { cerr << "Error opening " << filepath << endl; return nullptr; }
+    EVP_PKEY* pkey = PEM_read_PUBKEY(fp, nullptr, nullptr, nullptr);
+    fclose(fp);
+    return pkey;
+}
+
+bool derive_shared_secret(EVP_PKEY* priv_key, EVP_PKEY* peer_pub_key, vector<uint8_t>& out_secret) {
+    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(priv_key, nullptr);
+    if (!ctx) return false;
+
+    if (EVP_PKEY_derive_init(ctx) <= 0) return false;
+    if (EVP_PKEY_derive_set_peer(ctx, peer_pub_key) <= 0) return false;
+
+    size_t secret_len;
+    if (EVP_PKEY_derive(ctx, nullptr, &secret_len) <= 0) return false;
+
+    out_secret.resize(secret_len);
+    if (EVP_PKEY_derive(ctx, out_secret.data(), &secret_len) <= 0) return false;
+
+    EVP_PKEY_CTX_free(ctx);
+    return true;
+}

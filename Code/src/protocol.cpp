@@ -1,149 +1,143 @@
-/**
- * protocol.cpp - Implements all serialization/deserialization logic.
- * 
- * This module operates on raw TCP sockets (int socket_fd).
- * It does NOT use OpenSSL TLS/SSL functions.
- * Encryption/decryption is handled by using AES-GCM.
- * 
- * TODO: For pack functions:
- *   - The first byte of the payload must be the Command (from common.h).
- *   - Use htons(), htonl(), htobe64() for all integers.
- *   - Prepend length prefixes (e.g., uint16_t for strings) where needed.
- *   - Return a flat vector<uint8_t>.
- * 
- * TODO: For unpack functions:
- *   - Verify minimum length (atleast 1 byte for status).
- *   - Read integers with ntohs(), ntohl(), be64toh().
- *   - Return false if malformed or if the status is unknown.
- * 
- * TODO: For send_message:
- *   - Prepend the message length as a 4-byte big-endian integer.
- *   - Call send() in a loop until all bytes (length prefix + payload) are transmitted.
- * 
- * TODO: For recv_message:
- *   - Read the first 4 bytes to get the payload length (use recv() in a loop).
- *   - Loop recv() until the exact number of bytes is received.
- *   - Return the payload in out_data.
- */
-
 #include "../header_files/protocol.h"
 #include <cstring>
-#include <stdexcept>
 #include <sys/socket.h>
-#include <netinet/in.h>  // for htonl / ntohl
-#include <unistd.h>      // for close
-#include <cerrno>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <arpa/inet.h> 
 
-// send message - takes payload, prepends length, and sends both over socket_fd, loops until all bytes are sent
-bool send_message(int socket_fd, const std::vector<uint8_t>& payload) {
-    //Check payload size
+using namespace std;
+
+// Sends a message over the socket, prepending a 4-byte length header in network byte order
+bool send_message(int socket_fd, const vector<uint8_t>& payload) {
     uint32_t payload_len = static_cast<uint32_t>(payload.size());
-    if (payload_len > MAX_MESSAGE_SIZE) {
-        return false;   // payload is too large
-    }
+    if (payload_len > MAX_MESSAGE_SIZE) return false;   
 
-    //Convert length to network byte order (big-endian)
     uint32_t net_len = htonl(payload_len);
-
-    //Build the send buffer: [4-byte length] + [payload]
-    std::vector<uint8_t> send_buffer;
+    vector<uint8_t> send_buffer;
     send_buffer.reserve(4 + payload_len);
 
-    //Copy the 4 bytes of the length header
     const uint8_t* len_bytes = reinterpret_cast<const uint8_t*>(&net_len);
     send_buffer.insert(send_buffer.end(), len_bytes, len_bytes + 4);
-
-    //Copy the payload
     send_buffer.insert(send_buffer.end(), payload.begin(), payload.end());
 
-    //Send everything in a loop (handle partial sends)
     size_t total_sent = 0;
     const size_t total_to_send = send_buffer.size();
 
+    // Loop until all bytes are transmitted
     while (total_sent < total_to_send) {
-        ssize_t bytes_sent = send(socket_fd,
-                                send_buffer.data() + total_sent,
-                                total_to_send - total_sent,
-                                0);   // flags = 0 (blocking)
-
-        if (bytes_sent == -1) {
-            // Error occurred (e.g., broken pipe)
-            return false;
-        }
-
-        if (bytes_sent == 0) {
-            // Connection was closed by the peer
-            return false;
-        }
-
+        ssize_t bytes_sent = send(socket_fd, send_buffer.data() + total_sent, total_to_send - total_sent, 0);
+        if (bytes_sent <= 0) return false;
         total_sent += static_cast<size_t>(bytes_sent);
     }
-
     return true;
 }
 
-
-// recv message - reads 4-byte length prefix, then reads the exact number of bytes specified by the length, loops until the full payload is received, returns payload in out_payload
-bool recv_message(int socket_fd, std::vector<uint8_t>& out_payload) {
-    //Read exactly 4 bytes for the length prefix
+// Receives a message, reading the 4-byte header first to determine the payload size
+bool recv_message(int socket_fd, vector<uint8_t>& out_payload) {
     uint8_t len_buf[4];
     size_t total_received = 0;
 
     while (total_received < 4) {
-        ssize_t bytes_recv = recv(socket_fd,
-                                len_buf + total_received,
-                                4 - total_received,
-                                0);   // flags = 0 (blocking)
-
-        if (bytes_recv == -1) {
-            return false;   // socket error
-        }
-
-        if (bytes_recv == 0) {
-            return false;   // peer closed the connection
-        }
-
+        ssize_t bytes_recv = recv(socket_fd, len_buf + total_received, 4 - total_received, 0);
+        if (bytes_recv <= 0) return false;
         total_received += static_cast<size_t>(bytes_recv);
     }
 
-    //Decode the length (convert from network to host byte order)
     uint32_t net_len;
-    std::memcpy(&net_len, len_buf, 4);
+    memcpy(&net_len, len_buf, 4);
     uint32_t payload_len = ntohl(net_len);
 
-    //Validate the length (security check)
     if (payload_len == 0) {
-        // Empty payload is allowed
         out_payload.clear();
         return true;
     }
+    if (payload_len > MAX_MESSAGE_SIZE) return false;
 
-    // check for maliciously large payloads to prevent exhaustion attacks
-    if (payload_len > MAX_MESSAGE_SIZE) {
-        // Malicious or corrupted message - reject it
-        return false;
-    }
-
-    //Read exactly 'payload_len' bytes
     out_payload.resize(payload_len);
     total_received = 0;
 
+    // Read exactly payload_len bytes from the socket
     while (total_received < payload_len) {
-        ssize_t bytes_recv = recv(socket_fd,
-                                  out_payload.data() + total_received,
-                                  payload_len - total_received,
-                                  0);
-
-        if (bytes_recv == -1) {
-            return false;   // socket error
-        }
-
-        if (bytes_recv == 0) {
-            return false;   // peer disconnected mid-message
-        }
-
+        ssize_t bytes_recv = recv(socket_fd, out_payload.data() + total_received, payload_len - total_received, 0);
+        if (bytes_recv <= 0) return false;
         total_received += static_cast<size_t>(bytes_recv);
     }
+    return true;
+}
 
+// Packs the Client Hello parameters: [2 bytes key len] + [Epub_C] + [Nonce]
+vector<uint8_t> pack_client_hello(const vector<uint8_t>& epub_c, const vector<uint8_t>& nc) {
+    vector<uint8_t> buffer;
+    uint16_t key_len = htons(static_cast<uint16_t>(epub_c.size()));
+    const uint8_t* len_ptr = reinterpret_cast<const uint8_t*>(&key_len);
+    
+    buffer.insert(buffer.end(), len_ptr, len_ptr + 2);
+    buffer.insert(buffer.end(), epub_c.begin(), epub_c.end());
+    buffer.insert(buffer.end(), nc.begin(), nc.end());
+    
+    return buffer;
+}
+
+bool unpack_client_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_epub_c, vector<uint8_t>& out_nc) {
+    if (payload.size() < 2) return false;
+    
+    uint16_t key_len_net;
+    memcpy(&key_len_net, payload.data(), 2);
+    uint16_t key_len = ntohs(key_len_net);
+
+    // Validate overall length
+    if (payload.size() != 2 + key_len + NONCE_SIZE) return false;
+
+    out_epub_c.assign(payload.begin() + 2, payload.begin() + 2 + key_len);
+    out_nc.assign(payload.begin() + 2 + key_len, payload.end());
+    
+    return true;
+}
+
+// Packs the Server Hello parameters: [2 bytes key len] + [Epub_S] + [Nonce] + [2 bytes sig len] + [Signature]
+vector<uint8_t> pack_server_hello(const vector<uint8_t>& epub_s, const vector<uint8_t>& ns, const vector<uint8_t>& signature) {
+    vector<uint8_t> buffer;
+    uint16_t key_len = htons(static_cast<uint16_t>(epub_s.size()));
+    uint16_t sig_len = htons(static_cast<uint16_t>(signature.size()));
+
+    buffer.insert(buffer.end(), reinterpret_cast<uint8_t*>(&key_len), reinterpret_cast<uint8_t*>(&key_len) + 2);
+    buffer.insert(buffer.end(), epub_s.begin(), epub_s.end());
+    
+    buffer.insert(buffer.end(), ns.begin(), ns.end());
+    
+    buffer.insert(buffer.end(), reinterpret_cast<uint8_t*>(&sig_len), reinterpret_cast<uint8_t*>(&sig_len) + 2);
+    buffer.insert(buffer.end(), signature.begin(), signature.end());
+    
+    return buffer;
+}
+
+bool unpack_server_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_epub_s, vector<uint8_t>& out_ns, vector<uint8_t>& out_signature) {
+    if (payload.size() < 2) return false;
+    size_t offset = 0;
+
+    // Extract Epub_S
+    uint16_t key_len;
+    memcpy(&key_len, payload.data() + offset, 2);
+    key_len = ntohs(key_len);
+    offset += 2;
+
+    if (payload.size() < offset + key_len + NONCE_SIZE + 2) return false; 
+
+    out_epub_s.assign(payload.begin() + offset, payload.begin() + offset + key_len);
+    offset += key_len;
+
+    // Extract Ns
+    out_ns.assign(payload.begin() + offset, payload.begin() + offset + NONCE_SIZE);
+    offset += NONCE_SIZE;
+
+    // Extract Signature
+    uint16_t sig_len;
+    memcpy(&sig_len, payload.data() + offset, 2);
+    sig_len = ntohs(sig_len);
+    offset += 2;
+
+    if (payload.size() != offset + sig_len) return false;
+
+    out_signature.assign(payload.begin() + offset, payload.begin() + offset + sig_len);
     return true;
 }

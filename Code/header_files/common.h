@@ -10,13 +10,15 @@
 
 #include <cstdint>
 
-#define DEFAULT_PORT 8080
+#define DEFAULT_PORT 8081
 #define IP_ADDRESS "127.0.0.1"
 #define HASH_LEN 32
 #define MAX_MESSAGE_SIZE 65536
 #define MAX_DH_PUBKEY_LEN 1024 
 #define NONCE_SIZE 32
 #define MAX_SIGNATURE_LEN 128
+
+using namespace std;
 
 // TODO: Define Command enum (uint8_t): AUTH, TIMESTAMP, BALANCE - done
 enum class Command : uint8_t {
