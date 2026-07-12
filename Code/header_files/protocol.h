@@ -18,6 +18,23 @@
 #include <cstdint>
 #include "common.h"
 
+// ---------------------- handshake structs ------------------------------
+
+typedef struct {
+    unsigned char pubkey_ecdh[MAX_DH_PUBKEY_LEN];
+    size_t pubkey_ecdh_len;
+    unsigned char nonce[NONCE_SIZE];
+} handshakeClient;
+
+typedef struct {
+    unsigned char pubkey_ecdh[MAX_DH_PUBKEY_LEN];
+    size_t pubkey_ecdh_len;
+    unsigned char nonce[NONCE_SIZE];
+    unsigned char signature[MAX_SIGNATURE_LEN]; 
+    size_t signature_len;
+} handshakeServer;
+
+/* not used for now
 // ---------- Request Structs ----------
 struct AuthRequest {
     std::string username;
@@ -57,6 +74,7 @@ std::vector<uint8_t> pack_timestamp_request(const TimestampRequest& req);
 bool unpack_auth_response(const std::vector<uint8_t>& data, AuthResponse& out);
 bool unpack_timestamp_response(const std::vector<uint8_t>& data, TimestampResponse& out);
 bool unpack_balance_response(const std::vector<uint8_t>& data, BalanceResponse& out);
+*/
 
 // ---------- Raw I/O Helpers (over TCP socket, NOT SSL) ----------
 bool send_message(int socket_fd, const std::vector<uint8_t>& payload);

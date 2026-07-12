@@ -43,7 +43,7 @@ int main() {
     char client_ip[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
     cout << "[Test Server] Client connected from " << client_ip << ":" 
-         << ntohs(client_addr.sin_port) << endl;
+        << ntohs(client_addr.sin_port) << endl;
 
     // --- Main test loop: receive messages and echo them back ---
     // Keep running until the client disconnects(recv_message returns false) 
@@ -67,7 +67,7 @@ int main() {
             // Convert payload to string for printing (assuming it's ASCII text)
             string message(received_payload.begin(), received_payload.end());
             cout << "[Test Server] Received (#" << message_count << "): \"" << message << "\"" 
-                 << " (size: " << received_payload.size() << " bytes)" << endl;
+                << " (size: " << received_payload.size() << " bytes)" << endl;
 
             // Echo the same message back to the client
             cout << "[Test Server] Echoing back..." << endl;

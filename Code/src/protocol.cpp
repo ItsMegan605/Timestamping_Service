@@ -62,9 +62,9 @@ bool send_message(int socket_fd, const std::vector<uint8_t>& payload) {
 
     while (total_sent < total_to_send) {
         ssize_t bytes_sent = send(socket_fd,
-                                  send_buffer.data() + total_sent,
-                                  total_to_send - total_sent,
-                                  0);   // flags = 0 (blocking)
+                                send_buffer.data() + total_sent,
+                                total_to_send - total_sent,
+                                0);   // flags = 0 (blocking)
 
         if (bytes_sent == -1) {
             // Error occurred (e.g., broken pipe)
@@ -91,9 +91,9 @@ bool recv_message(int socket_fd, std::vector<uint8_t>& out_payload) {
 
     while (total_received < 4) {
         ssize_t bytes_recv = recv(socket_fd,
-                                  len_buf + total_received,
-                                  4 - total_received,
-                                  0);   // flags = 0 (blocking)
+                                len_buf + total_received,
+                                4 - total_received,
+                                0);   // flags = 0 (blocking)
 
         if (bytes_recv == -1) {
             return false;   // socket error

@@ -21,6 +21,10 @@
 
 std::vector<uint8_t> generate_nonce(size_t length);
 EVP_PKEY* generate_ephemeral_key();
+std::vector<uint8_t> serialize_pubkey(EVP_PKEY* pkey);
+std::vector<uint8_t> sign_data(const std::vector<uint8_t>& data, EVP_PKEY* priv_key);
+bool verify_signature(const std::vector<uint8_t>& data, const std::vector<uint8_t>& signature, EVP_PKEY* pub_key);
+
 
 // ---------- Hashing ----------
 // TODO: std::array<uint8_t, 32> sha256_file(const std::string& filename)

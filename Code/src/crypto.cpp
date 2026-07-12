@@ -56,6 +56,55 @@ std::vector<uint8_t> generate_nonce(size_t length) {
     return nonce;
 }
 
+std::vector<uint8_t> serialize_pubkey(EVP_PKEY* pkey) {
+    unsigned char* buf = nullptr;
+    int len = i2d_PUBKEY(pkey, &buf);
+    std::vector<uint8_t> result(buf, buf + len);
+    OPENSSL_free(buf);
+    return result;
+}
+
+
+std::vector<uint8_t> sign_data(const std::vector<uint8_t>& data, EVP_PKEY* priv_key) {
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    size_t sig_len;
+
+    // Initialize signing with SHA-256
+    if (EVP_DigestSignInit(ctx, NULL, EVP_sha256(), NULL, priv_key) <= 0) {
+        // Handle error
+    }
+
+    // Determine required signature buffer length
+    if (EVP_DigestSign(ctx, NULL, &sig_len, data.data(), data.size()) <= 0) {
+        // Handle error
+    }
+
+    std::vector<uint8_t> signature(sig_len);
+    // Execute signing
+    if (EVP_DigestSign(ctx, signature.data(), &sig_len, data.data(), data.size()) <= 0) {
+        // Handle error
+    }
+
+    EVP_MD_CTX_free(ctx);
+    return signature;
+}
+
+bool verify_signature(const std::vector<uint8_t>& data, 
+                    const std::vector<uint8_t>& signature, 
+                    EVP_PKEY* pub_key) {
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    bool result = false;
+
+    if (EVP_DigestVerifyInit(ctx, NULL, EVP_sha256(), NULL, pub_key) > 0) {
+        if (EVP_DigestVerify(ctx, signature.data(), signature.size(), data.data(), data.size()) == 1) {
+            result = true; // Signature is valid
+        }
+    }
+    
+    EVP_MD_CTX_free(ctx);
+    return result;
+}
+
 // ================================================================
 // TODO: Implement all other functions declared in crypto.h
 // ================================================================

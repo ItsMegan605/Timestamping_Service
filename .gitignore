@@ -1,4 +1,16 @@
-
+# VS Code configuration
 .vscode/launch.json
 .vscode/settings.json
 .vscode/c_cpp_properties.json
+
+# Compiled object files
+*.o
+
+# Executables
+# Note: On Linux/macOS, executables often have no extension.
+server
+client
+*.exe
+
+# General compiler output
+*.out
