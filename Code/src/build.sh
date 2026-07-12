@@ -3,7 +3,7 @@ set -e
 
 echo "=== Avvio compilazione moduli ==="
 
-# 1. Scorre tutti i file .cpp nella cartella e li compila in file oggetto (.o)
+# 1. Compile all .cpp files in the folder into object files (.o)
 for src_file in *.cpp; do
     # Estrae il nome del file senza l'estensione (es. crypto.cpp -> crypto)
     obj_name="${src_file%.*}"
@@ -28,6 +28,18 @@ fi
 if [ -f "client.o" ]; then
     echo "Linking del Client..."
     g++ -std=c++17 client.o crypto.o connection.o protocol.o -o client -lssl -lcrypto -pthread
+fi
+
+# 4. Link the Test Server
+if [ -f "test_server.o" ]; then
+    echo "Linking del Test Server..."
+    g++ -std=c++17 test_server.o connection.o protocol.o -o test_server -pthread
+fi
+
+# 5. Link the Test Client
+if [ -f "test_client.o" ]; then
+    echo "Linking del Test Client..."
+    g++ -std=c++17 test_client.o connection.o protocol.o -o test_client -pthread
 fi
 
 echo ""

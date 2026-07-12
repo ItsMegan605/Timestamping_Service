@@ -1,6 +1,9 @@
 #include "../header_files/common.h"
 #include "../header_files/crypto.h"
 #include "../header_files/protocol.h"
+#include <iostream>
+#include <unistd.h>
+#include <cstdlib>
 
 int main() {
     // 1. Connessione TCP
@@ -32,6 +35,6 @@ int main() {
     // 8. Se autenticato, esegui il comando richiesto (timestamp o balance)
     //    oppure fai il loop interattivo.
     
-    closesocket(sock);
+    close(sock);
     return 0;
 }

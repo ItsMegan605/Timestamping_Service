@@ -1,6 +1,5 @@
 /**
  * protocol.h - Defines the exact wire format and serialization functions.
- * 
  * TODO: Declare structs for each request/response.
  * TODO: Declare pack() and unpack() functions for each message type.
  *       All integers must be serialized in network byte order (big-endian).
@@ -50,27 +49,17 @@ struct BalanceResponse {
 };
 
 // ---------- Serialization Functions (pack) ----------
-// TODO: std::vector<uint8_t> pack_request(Command cmd, const void* req_struct)
-//       or explicit: pack_auth_request, pack_timestamp_request.
-//       The first byte of the returned payload must be the Command value.
-//       All integers converted to network byte order (htons, htonl, htobe64).
-// TODO: std::vector<uint8_t> pack_auth_request(const AuthRequest& req)
-// TODO: std::vector<uint8_t> pack_timestamp_request(const TimestampRequest& req)
-//       (Balance request is just the command byte, so no pack function needed)
+std::vector<uint8_t> pack_auth_request(const AuthRequest& req);
+std::vector<uint8_t> pack_timestamp_request(const TimestampRequest& req);
+// Balance request is just the command byte, so no pack function needed
 
 // ---------- Deserialization Functions (unpack) ----------
-// TODO: bool unpack_auth_response(const std::vector<uint8_t>& data, AuthResponse& out)
-// TODO: bool unpack_timestamp_response(const std::vector<uint8_t>& data, TimestampResponse& out)
-// TODO: bool unpack_balance_response(const std::vector<uint8_t>& data, BalanceResponse& out)
-//       Each must verify minimum length and convert from network to host byte order.
+bool unpack_auth_response(const std::vector<uint8_t>& data, AuthResponse& out);
+bool unpack_timestamp_response(const std::vector<uint8_t>& data, TimestampResponse& out);
+bool unpack_balance_response(const std::vector<uint8_t>& data, BalanceResponse& out);
 
 // ---------- Raw I/O Helpers (over TCP socket, NOT SSL) ----------
-// TODO: bool send_message(int socket_fd, const std::vector<uint8_t>& payload)
-//       - Prepend a 4-byte big-endian length (payload size).
-//       - Send the length + payload using send() in a loop until all bytes sent.
-// TODO: bool recv_message(int socket_fd, std::vector<uint8_t>& out_payload)
-//       - Read the first 4 bytes to get the length.
-//       - Loop recv() until the exact number of payload bytes is received.
-//       - Return the payload in out_payload.
+bool send_message(int socket_fd, const std::vector<uint8_t>& payload);
+bool recv_message(int socket_fd, std::vector<uint8_t>& out_payload);
 
 #endif // PROTOCOL_H
