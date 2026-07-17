@@ -42,5 +42,11 @@ if [ -f "test_client.o" ]; then
     g++ -std=c++17 test_client.o connection.o protocol.o -o test_client -pthread
 fi
 
+# 6. Link the SHA-256 Test
+if [ -f "test_sha256.o" ]; then
+    echo "Linking del SHA-256 Test..."
+    g++ -std=c++17 test_sha256.o crypto.o -o test_sha256 -lssl -lcrypto -pthread
+fi
+
 echo ""
 echo "=== Build completata con successo! ==="
