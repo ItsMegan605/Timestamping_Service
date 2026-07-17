@@ -61,6 +61,7 @@ int setup_server(int port) {
         return -1;
     }
 
+    // Start listening for incoming connections with a backlog of 5
     if (listen(server_fd, 5) < 0) {
         cerr << "Listen error" << endl;
         close(server_fd);

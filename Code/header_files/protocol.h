@@ -29,24 +29,28 @@ bool unpack_client_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_ep
 vector<uint8_t> pack_server_hello(const vector<uint8_t>& epub_s, const vector<uint8_t>& ns, const vector<uint8_t>& signature);
 bool unpack_server_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_epub_s, vector<uint8_t>& out_ns, vector<uint8_t>& out_signature);
 
-/* not used for now and //TODO: probably to remove
+
 // ---------- Request Structs ----------
 struct AuthRequest {
     string username;
     string password;
 };
-
+/* not used for now and //TODO: probably to remove
 struct TimestampRequest {
     array<uint8_t, 32> hash;  // SHA-256 hash of the document
 };
 
 // (Balance request has no payload, just the command byte)
 
+*/
+
 // ---------- Response Structs ----------
 struct AuthResponse {
     Status status; // OK or AUTH_FAILED
 };
 
+
+/* not used for now and //TODO: probably to remove
 struct TimestampResponse {
     Status status; // OK, QUOTA_EXHAUSTED, or INTERNAL_ERROR
     array<uint8_t, 32> hash;
@@ -59,17 +63,26 @@ struct BalanceResponse {
     uint32_t consumed;
     uint32_t remaining;
 };
+*/
 
 // ---------- Serialization Functions (pack) ----------
 vector<uint8_t> pack_auth_request(const AuthRequest& req);
+vector<uint8_t> pack_auth_response(const AuthResponse& res);
+/* not used for now and //TODO: probably to remove
 vector<uint8_t> pack_timestamp_request(const TimestampRequest& req);
 // Balance request is just the command byte, so no pack function needed
+*/
+
 
 // ---------- Deserialization Functions (unpack) ----------
-bool unpack_auth_response(const vector<uint8_t>& data, AuthResponse& out);
+bool unpack_auth_request(const vector<uint8_t>& payload, AuthRequest& out);
+bool unpack_auth_response(const vector<uint8_t>& payload, AuthResponse& out);
+/*
 bool unpack_timestamp_response(const vector<uint8_t>& data, TimestampResponse& out);
 bool unpack_balance_response(const vector<uint8_t>& data, BalanceResponse& out);
 */
+
+
 
 // ---------- Raw I/O Helpers (over TCP socket, NOT SSL) ----------
 bool send_message(int socket_fd, const vector<uint8_t>& payload);

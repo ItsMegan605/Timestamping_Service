@@ -71,19 +71,33 @@ EVP_PKEY* deserialize_pubkey(const vector<uint8_t>& pubkey_bytes) {
 
 vector<uint8_t> sign_data(const vector<uint8_t>& data, EVP_PKEY* priv_key) {
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    // Check if context creation was successful
+    if (!ctx) {
+        cerr << "Error creating message digest context" << endl;
+        return {};
+    }
     size_t sig_len;
 
     if (EVP_DigestSignInit(ctx, NULL, EVP_sha256(), NULL, priv_key) <= 0) {
         // Error handling logic
+        cerr << "Error initializing signature operation" << endl;
+        EVP_MD_CTX_free(ctx);
+        return {};
     }
 
     if (EVP_DigestSign(ctx, NULL, &sig_len, data.data(), data.size()) <= 0) {
         // Error handling logic
+        cerr << "Error determining signature length" << endl;
+        EVP_MD_CTX_free(ctx);
+        return {};
     }
 
     vector<uint8_t> signature(sig_len);
     if (EVP_DigestSign(ctx, signature.data(), &sig_len, data.data(), data.size()) <= 0) {
         // Error handling logic
+        cerr << "Error generating signature" << endl;
+        EVP_MD_CTX_free(ctx);
+        return {};
     }
 
     EVP_MD_CTX_free(ctx);

@@ -141,3 +141,84 @@ bool unpack_server_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_ep
     out_signature.assign(payload.begin() + offset, payload.begin() + offset + sig_len);
     return true;
 }
+
+// Packs the AuthRequest struct into a byte vector: [2 bytes username len] + [username] + [2 bytes password len] + [password]
+vector<uint8_t> pack_auth_request(const AuthRequest& req) {
+    vector<uint8_t> out;
+
+    // Validate lengths before packing
+    uint16_t username_len = static_cast<uint16_t>(req.username.size());
+    uint16_t password_len = static_cast<uint16_t>(req.password.size());
+
+    // Convert to network byte order
+    uint16_t username_len_net = htons(username_len);
+    uint16_t password_len_net = htons(password_len);
+    
+    // Pack username length and username
+    out.insert(out.end(), reinterpret_cast<uint8_t*>(&username_len_net), reinterpret_cast<uint8_t*>(&username_len_net) + 2);
+    out.insert(out.end(), req.username.begin(), req.username.end());
+
+    // Pack password length and password
+    out.insert(out.end(), reinterpret_cast<uint8_t*>(&password_len_net), reinterpret_cast<uint8_t*>(&password_len_net) + 2);
+    out.insert(out.end(), req.password.begin(), req.password.end());
+    return out;
+}
+
+bool unpack_auth_request(const vector<uint8_t>& payload, AuthRequest& out) {
+    if (payload.size() < 4) return false; // Minimum size check: 2 bytes for username length and 2 bytes for password length = 4 bytes
+    
+    // constants for validation
+    const uint16_t MAX_USERNAME_LEN = 64; 
+    const uint16_t MAX_PASSWORD_LEN = 128; 
+
+    size_t offset = 0;
+
+    // read username length
+    uint16_t username_len_net;
+    memcpy(&username_len_net, payload.data() + offset, 2);
+    offset += 2;
+    uint16_t username_len = ntohs(username_len_net);
+
+    // Validate username length
+    if (username_len == 0 || username_len > MAX_USERNAME_LEN) return false;
+
+    // Check if there's enough bytes for username and password length
+    if (payload.size() < offset + username_len + 2) return false; 
+
+    // extract username
+    out.username.assign(payload.begin() + offset, payload.begin() + offset + username_len);
+    offset += username_len;
+
+    // read password length
+    uint16_t password_len_net;
+    memcpy(&password_len_net, payload.data() + offset, 2);
+    offset += 2;
+    uint16_t password_len = ntohs(password_len_net);
+
+    // Validate password length
+    if (password_len == 0 || password_len > MAX_PASSWORD_LEN) return false;
+
+    // Check if there's enough bytes for password
+    if (payload.size() < offset + password_len) return false;
+
+    // extract password
+    out.password.assign(payload.begin() + offset, payload.begin() + offset + password_len);
+    return true;
+}
+
+// Packs the AuthResponse struct into a byte vector: [1 byte status]
+vector<uint8_t> pack_auth_response(const AuthResponse& res) {
+    return vector<uint8_t>{static_cast<uint8_t>(res.status)};
+}
+
+bool unpack_auth_response(const vector<uint8_t>& payload, AuthResponse& out) {
+    if (payload.size() != 1) return false; // AuthResponse should be exactly 1 byte
+    
+    uint8_t status_byte = payload[0];
+    // validate that the status byte corresponds to a valid Status enum value
+    if (status_byte > static_cast<uint8_t>(Status::INTERNAL_ERROR)) return false;
+    
+    out.status = static_cast<Status>(payload[0]);
+    return true;
+}
+
