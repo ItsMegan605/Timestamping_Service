@@ -48,5 +48,11 @@ if [ -f "test_sha256.o" ]; then
     g++ -std=c++17 test_sha256.o crypto.o -o test_sha256 -lssl -lcrypto -pthread
 fi
 
+# 7. HKDF Test
+if [ -f "test_hkdf.o" ]; then
+    echo "Linking del HKDF Test..."
+    g++ -std=c++17 test_hkdf.o crypto.o -o test_hkdf -lssl -lcrypto -pthread
+fi
+
 echo ""
 echo "=== Build completata con successo! ==="

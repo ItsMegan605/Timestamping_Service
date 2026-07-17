@@ -55,4 +55,25 @@ EVP_PKEY* load_public_key(const string& filepath);
 // ECDH shared secret derivation
 bool derive_shared_secret(EVP_PKEY* priv_key, EVP_PKEY* peer_pub_key, vector<uint8_t>& out_secret);
 
+// HKDF key derivation
+/*
+ derives AES encryption key and IV from the ECDH shared secret using HKDF
+ @param shared_secret - the raw ECDH shared secret (from derive_shared_secret)
+ @param out_enc_key - output: 32-byte AES-256 key
+ @param out_iv - output: 12-byte AES IV for AES-GCM
+ @return true on success, false on failure
+
+ algorittm: HKDF with SHA-256 (extract and expand)
+    - salt = client nonce || server nonce
+    - info = "tss_session_key"
+    - output length = 32 (key) + 12 (IV) = 44 bytes
+ensures unique session keys even if the same shared secret is used and mixing in the nonces provides PFS
+*/
+
+bool hkdf_extract_expand(const vector<uint8_t>& shared_secret,
+                         const vector<uint8_t>& client_nonce,
+                         const vector<uint8_t>& server_nonce,
+                         vector<uint8_t>& out_enc_key,
+                         vector<uint8_t>& out_iv);
+
 #endif // CRYPTO_H
