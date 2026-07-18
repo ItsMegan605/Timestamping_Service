@@ -82,8 +82,6 @@ bool unpack_timestamp_response(const vector<uint8_t>& data, TimestampResponse& o
 bool unpack_balance_response(const vector<uint8_t>& data, BalanceResponse& out);
 */
 
-
-
 // ---------- Raw I/O Helpers (over TCP socket, NOT SSL) ----------
 bool send_message(int socket_fd, const vector<uint8_t>& payload);
 bool recv_message(int socket_fd, vector<uint8_t>& out_payload);
