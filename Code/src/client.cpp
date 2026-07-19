@@ -30,6 +30,14 @@ int main() {
     // Generate Client Nonce (Nc) and ephemeral ECDH key pair
     vector<uint8_t> nc = generate_nonce(NONCE_SIZE);
     EVP_PKEY* client_eph_key = generate_ephemeral_key();
+
+    if (!client_eph_key) {
+        cerr << "Errore nella generazione della chiave effimera" << endl;
+        EVP_PKEY_free(server_conn_pub);
+        close(sock);
+        return EXIT_FAILURE;
+    }
+    
     vector<uint8_t> epub_c = serialize_pubkey(client_eph_key);
 
 
@@ -97,19 +105,27 @@ int main() {
     cout << "[Client] Handshake verified successfully!" << endl;
 
 
-    // -------------- secret deriving ---------------
+// -------------- secret deriving ---------------
 
     // Derive the ECDH Shared Secret
     vector<uint8_t> shared_secret;
     EVP_PKEY* peer_pub_key = deserialize_pubkey(epub_s);
     
-    if (peer_pub_key) {
-        if (derive_shared_secret(client_eph_key, peer_pub_key, shared_secret)) {
-            cout << "[Client] ECDH Shared secret calculated successfully!" << endl;
+    if (!peer_pub_key || !derive_shared_secret(client_eph_key, peer_pub_key, shared_secret)) {
+        cerr << "Critical error: impossible to derive shared secret" << endl;
+        if (peer_pub_key) {
+            EVP_PKEY_free(peer_pub_key);
         }
-        EVP_PKEY_free(peer_pub_key);
+        
+        EVP_PKEY_free(server_conn_pub); 
+        EVP_PKEY_free(client_eph_key);
+        
+        close(sock); 
+        return EXIT_FAILURE; 
     }
-
+    
+    cout << "[Client] ECDH Shared secret calculated successfully!" << endl; 
+    EVP_PKEY_free(peer_pub_key);
 
     // TODO: (Session Keys - HKDF)
     // 1. Invoke hkdf_extract_expand(shared_secret, nc, ns, aes_key, aes_iv).

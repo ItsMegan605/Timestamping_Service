@@ -475,14 +475,17 @@ if (aad && aad_len > 0) {
         }
     }
 
-    if (EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len)!= 1 ){
-    return -1;
-    ciphertext_len = len;
-}
-    if (EVP_EncryptFinal_ex(ctx, ciphertext + len, &len)!= 1 ){
-    return -1;
-    ciphertext_len += len;
+    if (EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return -1;
     }
+    ciphertext_len = len;
+
+    if (EVP_EncryptFinal_ex(ctx, ciphertext + ciphertext_len, &len) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return -1;
+    }
+    ciphertext_len += len;
 
     if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag) != 1) {
         EVP_CIPHER_CTX_free(ctx);
@@ -508,32 +511,30 @@ if (!ctx){
     int len = 0;
     int plaintext_len = 0;
 
-if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) != 1) {
+if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, key, iv) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return -1;
     }
 
-if (EVP_DecryptInit(ctx, EVP_aes_256_gcm(), key, iv) != 1) {
-    return -1;
-}
-
 if (aad && aad_len > 0) {
         if (EVP_DecryptUpdate(ctx, NULL, &len, aad, aad_len) != 1 ){
+    EVP_CIPHER_CTX_free(ctx);
     return -1;
     }
 }
 
-    if (EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len)!= 1 ){
-    return -1;
+    if (EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return -1;
+    }
     plaintext_len = len;
-}
 
 if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, (void*)tag) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return -1;
     }
 
-    if (EVP_DecryptFinal_ex(ctx, plaintext + len, &len) <= 0) {
+    if (EVP_DecryptFinal_ex(ctx, plaintext + plaintext_len, &len) <= 0) {
         EVP_CIPHER_CTX_free(ctx);
         return -1; 
     }

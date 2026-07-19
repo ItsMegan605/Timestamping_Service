@@ -10,69 +10,44 @@
 
 using namespace std;
 
+// --- ECDH & Ephemeral Keys ---
 vector<uint8_t> generate_nonce(size_t length);
 EVP_PKEY* generate_ephemeral_key();
 vector<uint8_t> serialize_pubkey(EVP_PKEY* pkey);
-EVP_PKEY* deserialize_pubkey(const vector<uint8_t>& pubkey_bytes); // AGGIUNTA
+EVP_PKEY* deserialize_pubkey(const vector<uint8_t>& pubkey_bytes);
+
+// --- Signatures ---
 vector<uint8_t> sign_data(const vector<uint8_t>& data, EVP_PKEY* priv_key);
 bool verify_signature(const vector<uint8_t>& data, const vector<uint8_t>& signature, EVP_PKEY* pub_key);
 
-// for SHA256 hashing
-/*
-computes the SHA-256 hash of raw data
-@param data the input data to hash
-@return array<uint8_t, 32> the 32-byte hash
-Use case: hashing paswords (with salt) for database storage
-*/
+// --- SHA-256 Hashing ---
 array<uint8_t, 32> sha256_data(const vector<uint8_t>& data);
-
-/*
-Convenience overload for hashing strings
-@param data the input string to hash
-@return array<uint8_t, 32> the 32-byte hash
-*/
 array<uint8_t, 32> sha256_data(const string& data);
-
-/*
-Computes the SHA-256 hash of a file's contents
-@param filename the path to the file to hash
-@return array<uint8_t, 32> the 32-byte hash
-
-Use case: users timestamping files - they do this locally, and then send the hash to the server for signing. The server does not need to see the file itself, only its hash.
-@note reads the file in chunks to handle large files efficiently
-*/
 array<uint8_t, 32> sha256_file(const string& filename);
 
-// signing and verifivation
-vector<uint8_t> sign_data(const vector<uint8_t>& data, EVP_PKEY* priv_key);
-bool verify_signature(const vector<uint8_t>& data, const vector<uint8_t>& signature, EVP_PKEY* pub_key);
-
-
-// key loading
+// --- Key Loading ---
 EVP_PKEY* load_private_key(const string& filepath);
 EVP_PKEY* load_public_key(const string& filepath);
 
-// ECDH shared secret derivation
+// --- Key Derivation (ECDH & HKDF) ---
 bool derive_shared_secret(EVP_PKEY* priv_key, EVP_PKEY* peer_pub_key, vector<uint8_t>& out_secret);
 
-// HKDF key derivation
-/*
-derives AES encryption key and IV from the ECDH shared secret using HKDF
-@param shared_secret - the raw ECDH shared secret (from derive_shared_secret)
-@param out_enc_key - output: 32-byte AES-256 key
-@param out_iv - output: 12-byte AES IV for AES-GCM
-@return true on success, false on failure
-algorittm: HKDF with SHA-256 (extract and expand)
-    - salt = client nonce || server nonce
-    - info = "tss_session_key"
-    - output length = 32 (key) + 12 (IV) = 44 bytes
-ensures unique session keys even if the same shared secret is used and mixing in the nonces provides PFS
-*/
-
+// Derives AES key (32 bytes) and IV (12 bytes) using HKDF-SHA256
 bool hkdf_extract_expand(const vector<uint8_t>& shared_secret,
                         const vector<uint8_t>& client_nonce,
                         const vector<uint8_t>& server_nonce,
                         vector<uint8_t>& out_enc_key,
                         vector<uint8_t>& out_iv);
+
+// --- AES-GCM 256 ---
+int encrypt_aes_gcm_256(const unsigned char *plaintext, int plaintext_len,
+                        const unsigned char *aad, int aad_len,
+                        const unsigned char *key, const unsigned char *iv,
+                        unsigned char *ciphertext, unsigned char *tag);
+
+int decrypt_aes_gcm_256(const unsigned char *ciphertext, int ciphertext_len,
+                        const unsigned char *aad, int aad_len,
+                        const unsigned char *key, const unsigned char *iv,
+                        unsigned char *plaintext, unsigned char *tag);
 
 #endif // CRYPTO_H

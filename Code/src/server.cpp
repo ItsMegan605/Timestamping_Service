@@ -50,6 +50,14 @@ void handle_client(int client_socket) {
     // Generate Server Nonce (Ns) and ephemeral ECDH key pair
     vector<uint8_t> ns = generate_nonce(NONCE_SIZE);
     EVP_PKEY* server_eph_key = generate_ephemeral_key();
+
+    if (!server_eph_key) {
+        cerr << "error while generating ephimeral key" << endl;
+        EVP_PKEY_free(server_conn_priv);
+        close(client_socket);
+        return;
+    }
+
     vector<uint8_t> epub_s = serialize_pubkey(server_eph_key);
 
     // Build the transcript to be signed: (Epub_C || Nc || Ns || Epub_S)
@@ -80,14 +88,16 @@ void handle_client(int client_socket) {
     // Derive the ECDH Shared Secret
     vector<uint8_t> shared_secret;
     EVP_PKEY* peer_pub_key = deserialize_pubkey(epub_c);
-    
-    if (peer_pub_key) {
-        if (derive_shared_secret(server_eph_key, peer_pub_key, shared_secret)) {
-            cout << "[Server] ECDH Shared secret calculated successfully!" << endl;
-        }
-        EVP_PKEY_free(peer_pub_key);
+    if (!peer_pub_key || !derive_shared_secret(server_eph_key, peer_pub_key, shared_secret)) {
+        cerr << "Errore critico: impossibile derivare il segreto condiviso ECDH" << endl;
+        if (peer_pub_key) EVP_PKEY_free(peer_pub_key);
+        EVP_PKEY_free(server_conn_priv);
+        EVP_PKEY_free(server_eph_key);
+        close(client_socket);
+        return;
     }
-
+    cout << "[Server] ECDH Shared secret calculated successfully!" << endl;
+    EVP_PKEY_free(peer_pub_key);
     
     
     // TODO: (Session Keys - HKDF)
