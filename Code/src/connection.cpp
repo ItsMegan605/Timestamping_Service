@@ -10,7 +10,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-using namespace std; // Acceptable in .cpp files, but strictly avoid in .h files.
+using namespace std; 
 
 // ==============================================================================
 // CLIENT SIDE

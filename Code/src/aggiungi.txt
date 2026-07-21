@@ -1,0 +1,154 @@
+ std::ifstream file(USER_CREDENTIALS_PATH);
+        
+        if (!file.is_open()) {
+            printf("ERROR WHEN OPENING JSON FILE AT %s\n", USER_CREDENTIALS_PATH);
+            outcome = status::ERROR;
+            return;
+        }
+
+        json j;
+        try {
+            file >> j; // Parsing
+        } catch (const json::parse_error& e) {
+            printf("ERROR WHEN PARSING JSON FILE: %s\n", e.what());
+            outcome = status::ERROR;
+            return;
+        }
+
+        clientListInformation = j.get<std::vector<UserInfo>>();
+    }
+
+
+
+
+    
+static string bytes_to_hex(const array<uint8_t, 32>& value) {
+    static const char hex_chars[] = "0123456789abcdef";
+    string result;
+    result.reserve(value.size() * 2);
+    for (uint8_t byte : value) {
+        result.push_back(hex_chars[byte >> 4]);
+        result.push_back(hex_chars[byte & 0x0F]);
+    }
+    return result;
+}
+
+static bool strings_equal_constant_time(const string& a, const string& b) {
+    if (a.size() != b.size()) return false;
+    return CRYPTO_memcmp(a.data(), b.data(), a.size()) == 0;
+}
+
+bool UserDatabase::load_from_file(const string& path) {
+    lock_guard<mutex> lock(mtx_);
+
+    ifstream file(path);
+    if (!file.is_open()) {
+        cerr << "ERROR: Unable to open user database file: " << path << endl;
+        return false;
+    }
+
+    json root;
+    try {
+        file >> root;
+    } catch (const json::parse_error& e) {
+        cerr << "ERROR: Failed to parse user database JSON: " << e.what() << endl;
+        return false;
+    }
+
+    if (!root.contains("users") || !root["users"].is_array()) {
+        cerr << "ERROR: user database file missing 'users' array" << endl;
+        return false;
+    }
+
+    accounts_.clear();
+    for (const auto& entry : root["users"]) {
+        if (!entry.contains("username") || !entry.contains("salt") || !entry.contains("password_hash") || !entry.contains("consumed") || !entry.contains("total")) {
+            cerr << "WARNING: skipping malformed user entry in database" << endl;
+            continue;
+        }
+
+        UserAccount account;
+        account.username = entry["username"].get<string>();
+        account.salt = entry["salt"].get<string>();
+        account.password_hash = entry["password_hash"].get<string>();
+        account.consumed = entry["consumed"].get<uint32_t>();
+        account.total = entry["total"].get<uint32_t>();
+        accounts_.emplace(account.username, account);
+    }
+
+    current_file_ = path;
+    return true;
+}
+
+bool UserDatabase::save_to_file(const string& path) const {
+    lock_guard<mutex> lock(mtx_);
+
+    json root;
+    root["users"] = json::array();
+    for (const auto& pair : accounts_) {
+        root["users"].push_back(pair.second);
+    }
+
+    string tmp_path = path + ".tmp";
+    ofstream file(tmp_path, ios::binary);
+    if (!file.is_open()) {
+        cerr << "ERROR: Unable to open temp database file: " << tmp_path << endl;
+        return false;
+    }
+
+    file << root.dump(4);
+    file.close();
+    if (!file) {
+        cerr << "ERROR: Failed to write temp user database file" << endl;
+        return false;
+    }
+
+    if (std::rename(tmp_path.c_str(), path.c_str()) != 0) {
+        cerr << "ERROR: Unable to rename temp database file to " << path << endl;
+        return false;
+    }
+
+    return true;
+}
+
+bool UserDatabase::authenticate(const string& username, const string& password) const {
+    lock_guard<mutex> lock(mtx_);
+    auto it = accounts_.find(username);
+    if (it == accounts_.end()) {
+        return false;
+    }
+
+    const UserAccount& account = it->second;
+    string salted_password = account.salt + password;
+    array<uint8_t, 32> hash = sha256_data(salted_password);
+    string hash_hex = bytes_to_hex(hash);
+    return strings_equal_constant_time(hash_hex, account.password_hash);
+}
+
+bool UserDatabase::consume_timestamp(const string& username) {
+    lock_guard<mutex> lock(mtx_);
+    auto it = accounts_.find(username);
+    if (it == accounts_.end()) {
+        return false;
+    }
+
+    UserAccount& account = it->second;
+    if (account.consumed >= account.total) {
+        return false;
+    }
+
+    account.consumed += 1;
+    return save_to_file(current_file_.empty() ? "data/users.json" : current_file_);
+}
+
+bool UserDatabase::get_balance(const string& username, uint32_t& consumed, uint32_t& remaining) const {
+    lock_guard<mutex> lock(mtx_);
+    auto it = accounts_.find(username);
+    if (it == accounts_.end()) {
+        return false;
+    }
+
+    consumed = it->second.consumed;
+    remaining = it->second.remaining();
+    return true;
+}

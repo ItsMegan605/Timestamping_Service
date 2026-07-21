@@ -2,6 +2,7 @@
 #include "../header_files/crypto.h"
 #include "../header_files/protocol.h"
 #include "../header_files/database.h"
+#include "../header_files/interface.h"
 
 #include <iostream>
 #include <thread>
@@ -10,16 +11,15 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <cstdlib>
+#include <nlohmann/json.hpp>
 
+using json = nlohmann::json;
 using namespace std;
-
-// TODO: (Database) The UserDatabase instance should ideally be global or passed by reference to threads.
-// UserDatabase db;
-
+UserDatabase db;
 
 void handle_client(int client_socket) {
-    // TODO: (X.509 Architecture) The server should also load its X.509 certificate 
-    // (e.g., "server_cert.pem") to send it to the client during the handshake.
+
+    printBanner("[SERVER] New client connection established.", BOLD_MAGENTA);
     
     // Load the server's long-term private key for signing the transcript
     EVP_PKEY* server_conn_priv = load_private_key("../keys/server_conn_priv.pem");
@@ -29,7 +29,6 @@ void handle_client(int client_socket) {
     }
 
     // ---------- receiving client hello ----------
-    // Receive the Client Hello message
     vector<uint8_t> client_hello_payload;
     if (!recv_message(client_socket, client_hello_payload)) {
         EVP_PKEY_free(server_conn_priv);
@@ -45,14 +44,14 @@ void handle_client(int client_socket) {
         return;
     }
 
+    printBanner("[SERVER] 'Client Hello' received. Preparing reply...", BOLD_MAGENTA);
 
     // ----- server hello generation -------
-    // Generate Server Nonce (Ns) and ephemeral ECDH key pair
     vector<uint8_t> ns = generate_nonce(NONCE_SIZE);
     EVP_PKEY* server_eph_key = generate_ephemeral_key();
 
     if (!server_eph_key) {
-        cerr << "error while generating ephimeral key" << endl;
+        cerr << "error while generating ephemeral key" << endl;
         EVP_PKEY_free(server_conn_priv);
         close(client_socket);
         return;
@@ -60,50 +59,93 @@ void handle_client(int client_socket) {
 
     vector<uint8_t> epub_s = serialize_pubkey(server_eph_key);
 
-    // Build the transcript to be signed: (Epub_C || Nc || Ns || Epub_S)
+    // Build the transcript to be signed
     vector<uint8_t> transcript;
     transcript.insert(transcript.end(), epub_c.begin(), epub_c.end());
     transcript.insert(transcript.end(), nc.begin(), nc.end());
     transcript.insert(transcript.end(), ns.begin(), ns.end());
     transcript.insert(transcript.end(), epub_s.begin(), epub_s.end());
 
-    // Sign the transcript to authenticate the server to the client
+    // Sign the transcript
     vector<uint8_t> signature = sign_data(transcript, server_conn_priv);
     
-    // TODO: (Protocol) Modify pack_server_hello to include the server's X.509 certificate (in DER format) 
-    // so the client can extract it and verify it using X509_verify_cert().
+    // Deallocazione UNICA della chiave privata a lungo termine
+    EVP_PKEY_free(server_conn_priv);
     
-    // Pack and send the Server Hello message
+    printBanner("[SERVER] Sending 'Server Hello' message", BOLD_MAGENTA);
+    
     vector<uint8_t> server_hello_payload = pack_server_hello(epub_s, ns, signature);
     
     if (!send_message(client_socket, server_hello_payload)) {
-        EVP_PKEY_free(server_conn_priv);
-        EVP_PKEY_free(server_eph_key);
+        EVP_PKEY_free(server_eph_key); // Nessun double free qui
         close(client_socket);
         return;
     }
 
     // ----- shared secret calculation ------
-
-    // Derive the ECDH Shared Secret
     vector<uint8_t> shared_secret;
     EVP_PKEY* peer_pub_key = deserialize_pubkey(epub_c);
+    
     if (!peer_pub_key || !derive_shared_secret(server_eph_key, peer_pub_key, shared_secret)) {
-        cerr << "Errore critico: impossibile derivare il segreto condiviso ECDH" << endl;
+        cerr << "Critical error: impossible to derive ECDH shared secret" << endl;        
         if (peer_pub_key) EVP_PKEY_free(peer_pub_key);
-        EVP_PKEY_free(server_conn_priv);
-        EVP_PKEY_free(server_eph_key);
+        EVP_PKEY_free(server_eph_key); // Nessun double free qui
         close(client_socket);
         return;
     }
+    
     cout << "[Server] ECDH Shared secret calculated successfully!" << endl;
+    
+    // Deallocazione UNICA delle chiavi effimere
     EVP_PKEY_free(peer_pub_key);
+    EVP_PKEY_free(server_eph_key);
     
+// -------------- key derivation function (KDF) ---------------
     
-    // TODO: (Session Keys - HKDF)
-    // 1. Invoke hkdf_extract_expand(shared_secret, nc, ns, aes_key, aes_iv).
-    // 2. Securely erase shared_secret from memory (e.g., OPENSSL_cleanse) to ensure PFS.
-    // 3. Initialize a local sequence number (uint64_t seq_num = 0) for AES-GCM anti-replay.
+    vector<uint8_t> aes_key;
+    vector<uint8_t> aes_iv;
+    
+    if (!hkdf_extract_expand(shared_secret, nc, ns, aes_key, aes_iv)) {
+        cerr << "Critical error: HKDF derivation failed" << endl;
+        OPENSSL_cleanse(shared_secret.data(), shared_secret.size());
+        close(client_socket);
+        return;
+    }
+
+    OPENSSL_cleanse(shared_secret.data(), shared_secret.size());
+    printBanner("[SERVER] Handshake completed! Secure channel active.", BOLD_GREEN);
+    
+    uint64_t seq_num = 0;
+    
+    //----------------------- authentication phase -----------------------
+    vector<uint8_t> authentication;
+    if(!recv_message(client_socket, authentication)) {
+        cerr << "[SERVER:] error while authenticating the user" << endl;
+        close(client_socket);
+        return;
+    }
+
+    AuthRequest authRequest;
+    if(unpack_auth_request(authentication, authRequest) != 1) {
+        cerr << "Error with the request format" << endl;
+        close(client_socket);
+        return;
+    }
+
+    AuthResponse authResponse;
+    if(db.authenticate(authRequest.username, authRequest.password)){
+        printBanner("Authentication succesful!", BOLD_GREEN);
+        authResponse.status= Status::OK;
+    } else {
+        printBanner("AUthentication failed", BOLD_RED);
+        authResponse.status = Status::AUTH_FAILED;
+    }
+
+    vector<uint8_t> authResponsePayload = pack_auth_response(authResponse);
+    if(send_message(client_socket, authResponsePayload) != 1) {
+        cerr << "SERVER ERROR while answering to the request!!" << endl;
+        return;
+    }
 
     // TODO: (Application Phase - Authentication)
     // 1. Wait for AuthRequest using a NEW recv_secure_message() (AES-GCM decryption + TAG check).
@@ -135,15 +177,19 @@ void handle_client(int client_socket) {
     // TODO: Consider using RAII (std::unique_ptr with custom deleters) for EVP_PKEY 
     // to avoid memory leaks if early returns occur in the logic above.
 // Cleanup resources
-    EVP_PKEY_free(server_conn_priv);
-    EVP_PKEY_free(server_eph_key);
+
     close(client_socket);
 }
 
+
+
 int main() {
 
-    // TODO: (Database) Load the user database from the JSON file into memory BEFORE accepting connections.
-    // if (!db.load_from_file("data/users.json")) { return EXIT_FAILURE; }
+    // Caricamento del database JSON prima di accettare connessioni
+    if (!db.load_from_file("../data/users.json")) {
+        cerr << "[SERVER ERROR] Impossibile caricare users.json" << endl;
+        return EXIT_FAILURE;
+    }
     
     //opening of the connection
     int server_fd = setup_server(DEFAULT_PORT);

@@ -14,36 +14,54 @@
 #define DATABASE_H
 
 #include <string>
-#include <unordered_map>
-#include <mutex>
 #include <cstdint>
+#include <nlohmann/json.hpp>
 
+using json = nlohmann::json;
 using namespace std;
 
 
 struct UserAccount {
-    string password_hash;  // hex string
-    string salt;           // hex string
-    uint32_t total_purchased;
-    uint32_t consumed;
+    string username;
+    string password_hash;
+    string salt;
+    unsigned int remaining;
+    unsigned int consumed;
+    unsigned int total;
 };
+
+struct TimestampInfo {
+    unsigned int remaining;
+    unsigned int consumed;
+    unsigned int total;
+
+};
+
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(UserAccount, username, password_hash, salt, remaining, consumed, total)
 
 class UserDatabase {
+private:
+    string db_filepath;
+    vector<UserAccount> users;
+
+    void save_to_file();
+    string bytes_to_hex(const array<uint8_t, 32>& bytes);
+
 public:
     UserDatabase() = default;
-    ~UserDatabase() = default;
 
-    // TODO: bool load_from_file(const string& path = "data/users.json")
-    // TODO: bool save_to_file(const string& path = "data/users.json") 
+    // Carica i dati dal file JSON
+    bool load_from_file(const string& filepath);
 
-    // TODO: bool authenticate(const string& username, const string& password) const
-    // TODO: bool consume_timestamp(const string& username)  // returns false if quota exhausted
-    // TODO: void get_balance(const string& username, uint32_t& consumed, uint32_t& remaining) const
+    // Verifica le credenziali (SHA256(salt + password))
+    bool authenticate(const string& username, const string& password);
 
-private:
-    unordered_map<string, UserAccount> accounts_;
-    mutable mutex mtx_;   // protects accounts_ during concurrent ops
-    string current_file_;
+    // Ottiene il numero di timestamp
+    bool get_balance(const string& username, TimestampInfo& out_info);
+
+    // Decrementa un timestamp e salva su file
+    bool consume_timestamp(const string& username);
 };
 
-#endif // DATABASE_H
+#endif 

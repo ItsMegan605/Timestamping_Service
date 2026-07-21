@@ -20,26 +20,26 @@ echo "=== Avvio fase di linking (OpenSSL + Pthreads) ==="
 # Unisce server.o con i moduli condivisi e database.o
 if [ -f "server.o" ]; then
     echo "Linking del Server..."
-    g++ -std=c++17 server.o crypto.o connection.o protocol.o database.o -o server -lssl -lcrypto -pthread
+    g++ -std=c++17 server.o crypto.o connection.o protocol.o database.o interface.o -o server -lssl -lcrypto -pthread
 fi
 
 # 3. Crea l'eseguibile del Client 
 # Unisce client.o con i moduli condivisi (escludendo database.o e server.o)
 if [ -f "client.o" ]; then
     echo "Linking del Client..."
-    g++ -std=c++17 client.o crypto.o connection.o protocol.o -o client -lssl -lcrypto -pthread
+    g++ -std=c++17 client.o crypto.o connection.o protocol.o interface.o -o client -lssl -lcrypto -pthread
 fi
 
 # 4. Link the Test Server
 if [ -f "test_server.o" ]; then
     echo "Linking del Test Server..."
-    g++ -std=c++17 test_server.o connection.o protocol.o -o test_server -pthread
+    g++ -std=c++17 test_server.o connection.o protocol.o interface.o -o test_server -pthread
 fi
 
 # 5. Link the Test Client
 if [ -f "test_client.o" ]; then
     echo "Linking del Test Client..."
-    g++ -std=c++17 test_client.o connection.o protocol.o -o test_client -pthread
+    g++ -std=c++17 test_client.o connection.o protocol.o interface.o -o test_client -pthread
 fi
 
 # 6. Link the SHA-256 Test

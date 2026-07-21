@@ -150,7 +150,6 @@ bool unpack_client_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_ep
  * Current Format: [2 bytes key len] + [Epub_S] + [Nonce_S] + [2 bytes sig len] + [Signature]
  */
 vector<uint8_t> pack_server_hello(const vector<uint8_t>& epub_s, const vector<uint8_t>& ns, const vector<uint8_t>& signature) {
-    // TODO: (X.509 Integration) The server needs to send its X.509 certificate to the client.
     // Modify this function to accept `const vector<uint8_t>& cert_der` as a parameter.
     // The new format should be: [2B cert len] + [Certificate] + [2B key len] + [Epub_S] + [Nonce_S] + [2B sig len] + [Signature]
     
@@ -182,7 +181,6 @@ vector<uint8_t> pack_server_hello(const vector<uint8_t>& epub_s, const vector<ui
  * Deserializes the Server Hello parameters sequentially using an offset tracker.
  */
 bool unpack_server_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_epub_s, vector<uint8_t>& out_ns, vector<uint8_t>& out_signature) {
-    // TODO: (X.509 Integration) Modify this function to extract the X.509 Certificate (DER format) first,
     // corresponding to the changes in pack_server_hello. Add `vector<uint8_t>& out_cert` to parameters.
     
     if (payload.size() < 2) return false;
@@ -314,6 +312,17 @@ bool unpack_auth_response(const vector<uint8_t>& payload, AuthResponse& out) {
     return true;
 }
 
+vector<uint8_t> getUserBalance() {
+    //todo
+}
+
+vector<uint8_t> getUserTimestamp() {
+    //todo
+}
+
+vector<uint8_t> userVerification() {
+    //todo
+}
 
 // TODO: (Service Layer) Implement packing/unpacking for Timestamp and Balance operations.
 // 
