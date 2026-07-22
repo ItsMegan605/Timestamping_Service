@@ -1,25 +1,28 @@
-
 {
-	"users":	[{
-			"username": "student",
-      		"password_hash": "733b166ed1f583638af010a2fc8114ff3a5e2e73901d64dc99bc4758c4fe0590",
-      		"salt": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
-			"remaining":	7,
-			"consumed" : 3,
-			"total":	10
-		}, {
-			"username":	"admin",
-			"password_hash":	"3f1e1e36561e77882b04c697e51ce27334337ac16044f40fbe508bb3346c387e",
-			"salt":	"a298fc3d952971a790d4a76c22e69d31",
-			"remaining":	94,
-			"consumed" : 6,
-			"total":	100
-		}, {
-			"username":	"testuser",
-			"password_hash":	"a1aa4525a50e306f792679f42b8720ea6d62a9e04d32587dd95d6535d8431c59",
-			"salt":	"796c1914760c45059b5e7750ee9a51bf",
-			"consumed" : 58,			
-			"remaining":	31,
-			"total":	89
-		}]
+    "users": [
+        {
+            "consumed": 4,
+            "password_hash": "733b166ed1f583638af010a2fc8114ff3a5e2e73901d64dc99bc4758c4fe0590",
+            "remaining": 6,
+            "salt": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+            "total": 10,
+            "username": "student"
+        },
+        {
+            "consumed": 6,
+            "password_hash": "3f1e1e36561e77882b04c697e51ce27334337ac16044f40fbe508bb3346c387e",
+            "remaining": 94,
+            "salt": "a298fc3d952971a790d4a76c22e69d31",
+            "total": 100,
+            "username": "admin"
+        },
+        {
+            "consumed": 58,
+            "password_hash": "a1aa4525a50e306f792679f42b8720ea6d62a9e04d32587dd95d6535d8431c59",
+            "remaining": 31,
+            "salt": "796c1914760c45059b5e7750ee9a51bf",
+            "total": 89,
+            "username": "testuser"
+        }
+    ]
 }

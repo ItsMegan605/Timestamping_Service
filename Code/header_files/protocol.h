@@ -90,6 +90,7 @@ bool recv_secure_message(int socket_fd, vector<uint8_t>& out_cleartext, const ve
 
 void getUserBalance(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num);
 vector<uint8_t> pack_balance_response(const BalanceResponse& res);
+vector<uint8_t> pack_timestamp_response(const TimestampResponse& res);
 bool unpack_balance_response(const std::vector<uint8_t>& payload, BalanceResponse& out);
 
 void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num);

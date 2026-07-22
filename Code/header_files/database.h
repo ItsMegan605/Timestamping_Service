@@ -15,7 +15,10 @@
 
 #include <string>
 #include <cstdint>
+#include <vector>
+#include <array>
 #include <nlohmann/json.hpp>
+
 
 using json = nlohmann::json;
 using namespace std;
@@ -38,8 +41,27 @@ struct TimestampInfo {
 };
 
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(UserAccount, username, password_hash, salt, remaining, consumed, total)
+//NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(UserAccount, username, password_hash, salt, remaining, consumed, total)
+// Manual serialization – works with ALL versions of nlohmann/json
+inline void to_json(json& j, const UserAccount& u) {
+    j = json{
+        {"username", u.username},
+        {"password_hash", u.password_hash},
+        {"salt", u.salt},
+        {"remaining", u.remaining},
+        {"consumed", u.consumed},
+        {"total", u.total}
+    };
+}
 
+inline void from_json(const json& j, UserAccount& u) {
+    j.at("username").get_to(u.username);
+    j.at("password_hash").get_to(u.password_hash);
+    j.at("salt").get_to(u.salt);
+    j.at("remaining").get_to(u.remaining);
+    j.at("consumed").get_to(u.consumed);
+    j.at("total").get_to(u.total);
+}
 
 class UserDatabase {
 private:
