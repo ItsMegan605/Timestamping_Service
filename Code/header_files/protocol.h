@@ -36,14 +36,14 @@ struct AuthRequest {
     string username;
     string password;
 };
-/* not used for now and //TODO: probably to remove
+
 struct TimestampRequest {
     array<uint8_t, 32> hash;  // SHA-256 hash of the document
 };
 
 // (Balance request has no payload, just the command byte)
 
-*/
+
 
 // ---------- Response Structs ----------
 struct AuthResponse {
@@ -55,33 +55,30 @@ struct BalanceResponse {
     TimestampInfo info;
 };
 
-/* not used for now and //TODO: probably to remove
+
 struct TimestampResponse {
-    Status status; // OK, QUOTA_EXHAUSTED, or INTERNAL_ERROR
+    Status status;                  // OK, QUOTA_EXHAUSTED, or INTERNAL_ERROR
     array<uint8_t, 32> hash;
-    uint64_t timestamp;                // Unix time in seconds (network byte order when sent)
-    vector<uint8_t> signature;    // Variable length (DER-encoded ECDSA/RSA signature)
+    uint64_t timestamp;             // Unix time in seconds (network byte order when sent)
+    vector<uint8_t> signature;      // Variable length (DER-encoded ECDSA/RSA signature)
 };
 
 
-*/
+
 
 // ---------- Serialization Functions (pack) ----------
 vector<uint8_t> pack_auth_request(const AuthRequest& req);
 vector<uint8_t> pack_auth_response(const AuthResponse& res);
-/* not used for now and //TODO: probably to remove
 vector<uint8_t> pack_timestamp_request(const TimestampRequest& req);
 // Balance request is just the command byte, so no pack function needed
-*/
+
 
 
 // ---------- Deserialization Functions (unpack) ----------
 bool unpack_auth_request(const vector<uint8_t>& payload, AuthRequest& out);
 bool unpack_auth_response(const vector<uint8_t>& payload, AuthResponse& out);
-/*
 bool unpack_timestamp_response(const vector<uint8_t>& data, TimestampResponse& out);
 bool unpack_balance_response(const vector<uint8_t>& data, BalanceResponse& out);
-*/
 
 // ---------- Raw I/O Helpers (over TCP socket, NOT SSL) ----------
 bool send_message(int socket_fd, const vector<uint8_t>& payload);
@@ -95,7 +92,7 @@ void getUserBalance(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& a
 vector<uint8_t> pack_balance_response(const BalanceResponse& res);
 bool unpack_balance_response(const std::vector<uint8_t>& payload, BalanceResponse& out);
 
-vector<uint8_t> getUserTimestamp();
-vector<uint8_t> userVerification();
+void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num);
+void userVerification(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num);
 
 #endif 

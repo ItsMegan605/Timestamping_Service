@@ -481,26 +481,145 @@ bool unpack_balance_response(const vector<uint8_t>& payload, BalanceResponse& ou
     return true;
 }
 
-vector<uint8_t> getUserTimestamp() {
+void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num) {
     printBanner("Timestamp request submitted.", BOLD_CYAN);
-    //todo
+    std::string filepath;
+    cout << "Enter the path to the file you want to timestamp: ";
+    cin >> filepath;
+
+    // copute the SHA-256 hash of the file
+    array<uint8_t, 32> hash = sha256_file(filepath);
+    if(hash[0] == 0 && hash[1] == 0 && hash[2] == 0 && hash[3] == 0) {
+        cerr << "[CLIENT ERROR] Failed to compute SHA-256 hash of the file." << endl;
+        return;
+    }
+
+    // build request: command byte 'T' + 32-byte hash
+    TimestampRequest req;
+    req.hash = hash;
+    vector<uint8_t> request_payload;
+    request_payload.push_back('T'); // command
+    vector<uint8_t> ts_payload = pack_timestamp_request(req);
+    request_payload.insert(request_payload.end(), ts_payload.begin(), ts_payload.end());
+
+    if (!send_secure_message(sock, request_payload, aes_key, aes_iv, seq_num)) {
+        cerr << "[CLIENT ERROR] Error sending timestamp request!" << endl;
+        return;
+    }
+
+    vector<uint8_t> response_payload;
+    if (!recv_secure_message(sock, response_payload, aes_key, aes_iv, seq_num)) {
+        cerr << "[CLIENT ERROR] Error receiving timestamp response!" << endl;
+        return;
+    }
+
+    TimestampResponse resp;
+    if (!unpack_timestamp_response(response_payload, resp)) {
+        cerr << "[CLIENT ERROR] Invalid timestamp response format!" << endl;
+        return;
+    }
+
+    if (resp.status != Status::OK) {
+        cerr << "[CLIENT ERROR] Server failed to provide timestamp." << endl;
+        return;
+    }
+
+    // verify the signature using the server's timestamp public key
+    EVP_PKEY* ts_pubk = load_public_key("../keys/server_ts_pub.pem");
+    if (!ts_pubk) {
+        cerr << "[CLIENT ERROR] Failed to load timestamp public key." << endl;
+        return;
+    }
+
+    // Build the signed data: [32-byte hash] + [8-byte timestamp]
+    vector<uint8_t> signed_data(40);
+    memcpy(signed_data.data(), resp.hash.data(), 32);
+    uint64_t ts_net = htobe64(resp.timestamp);
+    memcpy(signed_data.data() + 32, &ts_net, 8);
+
+    bool valid_sig = verify_signature(signed_data, resp.signature, ts_pubk);
+    EVP_PKEY_free(ts_pubk);
+
+    if (valid_sig) {
+        printBanner("[CLIENT] Timestamp verification successful!", BOLD_GREEN);
+        cout << "Hash: ";
+        for (uint8_t byte : resp.hash) {
+            printf("%02x", byte);
+        }
+        cout << "\nTime: " << resp.timestamp << " (Unix epoch seconds)" << endl; 
+        cout << "Signature (hex): ";
+        for (uint8_t byte : resp.signature) {
+            printf("%02x", byte);
+        }
+        cout << endl;
+    }
+    else {
+        printBanner("[CLIENT ERROR] Timestamp VERIFICATION FAILED!", BOLD_RED);
+    }
 }
 
-vector<uint8_t> userVerification() {
+
+vector<uint8_t> pack_timestamp_request(const TimestampRequest& req) {
+    vector<uint8_t> out(32);
+    memcpy(out.data(), req.hash.data(), 32); 
+    return out;
+}
+
+bool unpack_timestamp_request(const vector<uint8_t>& payload, TimestampRequest& out) {
+    if (payload.size() != 32) return false;
+    memcpy(out.hash.data(), payload.data(), 32);
+    return true;
+}
+
+vector<uint8_t> pack_timestamp_response(const TimestampResponse& res) {
+    vector<uint8_t> out;
+
+    // status (1 byte)
+    out.push_back(static_cast<uint8_t>(res.status));
+    // hash (32 bytes)
+    out.insert(out.end(), res.hash.begin(), res.hash.end());
+    // timestamp (8 bytes, network byte order)
+    uint64_t ts_net = htobe64(res.timestamp);
+    uint8_t ts_bytes[8];
+    memcpy(ts_bytes, &ts_net, 8);
+    out.insert(out.end(), ts_bytes, ts_bytes + 8);
+    // signature length (2 bytes) + signature
+    uint16_t sig_len = htons(static_cast<uint16_t>(res.signature.size())); // convert to network byte order
+    uint8_t sig_len_bytes[2]; 
+    memcpy(sig_len_bytes, &sig_len, 2);
+    out.insert(out.end(), sig_len_bytes, sig_len_bytes + 2); 
+    out.insert(out.end(), res.signature.begin(), res.signature.end());
+    return out;
+}
+
+bool unpack_timestamp_response(const vector<uint8_t>& payload, TimestampResponse& out) {
+    if (payload.size() < 1 + 32 + 8 + 2) return false; // minimum size: status + hash + timestamp + sig_len
+
+    size_t offset = 0;
+    // status
+    uint8_t status_byte = payload[offset++];
+    if (status_byte > static_cast<uint8_t>(Status::INTERNAL_ERROR)) return false;
+    out.status = static_cast<Status>(status_byte);
+    // hash
+    memcpy(out.hash.data(), payload.data() + offset, 32);
+    offset += 32;
+    // timestamp
+    uint64_t ts_net;
+    memcpy(&ts_net, payload.data() + offset, 8);
+    out.timestamp = be64toh(ts_net);
+    offset += 8;
+    // signature length
+    uint16_t sig_len_net;
+    memcpy(&sig_len_net, payload.data() + offset, 2);
+    uint16_t sig_len = ntohs(sig_len_net);
+    offset += 2;
+    if (payload.size() != offset + sig_len) return false;
+    out.signature.assign(payload.begin() + offset, payload.begin() + offset + sig_len);
+
+    return true;
+}
+
+void userVerification(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num) {
     printBanner("Let's verify your timestamp.", BOLD_GREEN);
-    //todo
+    // TODO
 }
-
-// TODO: (Service Layer) Implement packing/unpacking for Timestamp and Balance operations.
-// 
-// vector<uint8_t> pack_timestamp_request(const TimestampRequest& req);
-// bool unpack_timestamp_request(const vector<uint8_t>& payload, TimestampRequest& out);
-// -> Format: [32 bytes SHA-256 hash]
-//
-// vector<uint8_t> pack_timestamp_response(const TimestampResponse& res);
-// bool unpack_timestamp_response(const vector<uint8_t>& payload, TimestampResponse& out);
-// -> Format: [1 byte Status] + [32 bytes Hash] + [8 bytes Unix Timestamp] + [2 bytes Sig Len] + [Signature]
-//
-// vector<uint8_t> pack_balance_response(const BalanceResponse& res);
-// bool unpack_balance_response(const vector<uint8_t>& payload, BalanceResponse& out);
-// -> Format: [1 byte Status] + [4 bytes Consumed (nc)] + [4 bytes Remaining (nr)]

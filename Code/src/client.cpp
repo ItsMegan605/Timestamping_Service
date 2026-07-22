@@ -237,10 +237,10 @@ vector<uint8_t> auth_response_payload;
             getUserBalance(sock, aes_key, aes_iv, seq_num);
         } 
         else if (choice == "timestamp"){
-            vector<uint8_t> timestamp = getUserTimestamp();
+            getUserTimestamp( sock, aes_key, aes_iv, seq_num);
         }
         else if (choice == "verify") {
-            vector<uint8_t> verification = userVerification();
+            userVerification(sock, aes_key, aes_iv, seq_num);
         } 
         else if (choice == "exit") {
             printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);

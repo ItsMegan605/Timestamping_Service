@@ -40,6 +40,7 @@ struct TimestampInfo {
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(UserAccount, username, password_hash, salt, remaining, consumed, total)
 
+
 class UserDatabase {
 private:
     string db_filepath;
