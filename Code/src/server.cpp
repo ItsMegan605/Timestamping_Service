@@ -150,32 +150,46 @@ void handle_client(int client_socket) {
         return;
     }
 
-    // TODO: (Application Phase - Authentication)
-    // 1. Wait for AuthRequest using a NEW recv_secure_message() (AES-GCM decryption + TAG check).
-    // 2. Unpack AuthRequest.
-    // 3. Hash the received password with the user's salt and compare it with the stored hash (db.authenticate()).
-    // 4. Send AuthResponse via send_secure_message(). If authentication fails, close socket and return.
+    while (true) {
+        vector<uint8_t> encrypted_cmd;
+        
+        // 1. Securely wait for the next command from the client
+        if (!recv_secure_message(client_socket, encrypted_cmd, aes_key, aes_iv, seq_num)) {
+            cout << "[SERVER] Client disconnected or secure channel error." << endl;
+            break;
+        }
 
-    // TODO: (Application Phase - Timestamp Service Loop)
-    // while(recv_secure_message(client_socket, encrypted_cmd, aes_key, aes_iv, &seq_num)) {
-    //     Extract command type.
-    //     
-    //     IF command == BALANCE:
-    //         1. Fetch consumed and remaining timestamps from DB (db.get_balance()).
-    //         2. Pack and send encrypted BalanceResponse.
-    //
-    //     IF command == TIMESTAMP:
-    //         1. Check DB quota (db.consume_timestamp()) - make sure this is thread-safe (mutex).
-    //         2. If quota exhausted, send encrypted QUOTA_EXHAUSTED Response.
-    //         3. If quota > 0:
-    //            a. Extract document hash from request.
-    //            b. Get current system time (Unix timestamp).
-    //            c. Concatenate (hash || time).
-    //            d. Load the specific Timestamping private key ("server_ts_priv.pem").
-    //            e. Sign the concatenation (EVP_DigestSign).
-    //            f. Pack <hash, time, signature> and send encrypted TimestampResponse.
-    // }
+        if (encrypted_cmd.empty()) continue;
 
+        // 2. Read the command type (e.g., the first byte sent by the client)
+        char command_type = static_cast<char>(encrypted_cmd[0]);
+
+        if (command_type == 'B') { 
+            BalanceResponse res;
+            
+            // Interroghiamo il database usando l'username dell'utente autenticato in sessione
+            if (db.get_balance(authRequest.username, res.info)) {
+                res.status = Status::OK;
+            } else {
+                res.status = Status::INTERNAL_ERROR;
+            }
+
+            // Serializziamo la risposta
+            vector<uint8_t> balance_payload = pack_balance_response(res);
+
+            if (!send_secure_message(client_socket, balance_payload, aes_key, aes_iv, seq_num)) {
+                cerr << "[SERVER ERROR] Impossible to send balance response" << endl;
+                break;
+            }
+        }
+        else if (command_type == 'T') { // Example for Timestamp
+            // TODO: Handle timestamp consumption logic and digital signature
+        }
+        else if (command_type == 'E') { // Example for Exit / Graceful Logout
+            cout << "[SERVER] Received session close request from user." << endl;
+            break;
+        }
+    }
     // Cleanup resources
     // TODO: Consider using RAII (std::unique_ptr with custom deleters) for EVP_PKEY 
     // to avoid memory leaks if early returns occur in the logic above.

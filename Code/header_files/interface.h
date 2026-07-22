@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include "../header_files/database.h"
 
 const std::string RESET = "\033[0m";
 const std::string BOLD_RED     = "\033[1;31m";
@@ -15,5 +16,6 @@ const std::string BOLD_WHITE   = "\033[1;37m";
 
 void printBanner(const std::string& message, const std::string& color = BOLD_CYAN);
 void homeMenu();
+void balance(const TimestampInfo& info);
 
-#endif // CLI_UI_H
+#endif 

@@ -1,6 +1,10 @@
 #include "../header_files/protocol.h"
 #include "../header_files/crypto.h"
 #include "../header_files/interface.h"
+#include "../header_files/database.h"
+#include "../header_files/common.h"
+
+
 #include <cstring>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -387,11 +391,94 @@ bool recv_secure_message(int socket_fd, vector<uint8_t>& out_cleartext, const ve
     return true;
 }
 
-
-// user requested functions 
-vector<uint8_t> getUserBalance() {
+void getUserBalance(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num) {
+    
     printBanner("Balance request submitted. Here is your balance:", BOLD_MAGENTA);
-    //todo
+    cout << "Server request loading... \n";
+
+    // 1. Send command byte 'B' over the secure AES-GCM channel
+    vector<uint8_t> request_payload = {'B'}; 
+
+    if (!send_secure_message(sock, request_payload, aes_key, aes_iv, seq_num)) {
+        cerr << "[CLIENT ERROR] Error sending balance request!" << endl;
+        return; 
+    }
+
+    // 2. Receive encrypted payload from server
+    vector<uint8_t> response_payload;
+
+    if (!recv_secure_message(sock, response_payload, aes_key, aes_iv, seq_num)) {
+        cerr << "[CLIENT ERROR] Error receiving response from server!" << endl;
+        return;
+    }
+
+    // 3. Unpack & decrypt binary payload into C++ struct
+    BalanceResponse res;
+    if (!unpack_balance_response(response_payload, res)) {
+        cerr << "[CLIENT ERROR] Invalid balance response format!" << endl;
+        return;
+    }
+
+    // 4. Validate server status
+    if (res.status != Status::OK) {
+        cerr << "[CLIENT ERROR] Server failed to retrieve balance." << endl;
+        return;
+    }
+
+    cout << "Here is the server Response!!" << endl;
+    
+    // 5. Render populated data to screen
+    balance(res.info); 
+}
+
+vector<uint8_t> pack_balance_response(const BalanceResponse& res) {
+    vector<uint8_t> out;
+    out.reserve(13); // 1 + 4 + 4 + 4 bytes
+
+    // 1. Stato della risposta (1 byte)
+    out.push_back(static_cast<uint8_t>(res.status));
+
+    // Convertiamo gli unsigned int in Network Byte Order (Big-Endian)
+    uint32_t consumed_net = htonl(static_cast<uint32_t>(res.info.consumed));
+    uint32_t remaining_net = htonl(static_cast<uint32_t>(res.info.remaining));
+    uint32_t total_net = htonl(static_cast<uint32_t>(res.info.total));
+
+    // 2. Inserimento dei campi a 4 byte nel buffer
+    uint8_t buf[4];
+    
+    memcpy(buf, &consumed_net, 4);
+    out.insert(out.end(), buf, buf + 4);
+
+    memcpy(buf, &remaining_net, 4);
+    out.insert(out.end(), buf, buf + 4);
+
+    memcpy(buf, &total_net, 4);
+    out.insert(out.end(), buf, buf + 4);
+
+    return out;
+}
+bool unpack_balance_response(const vector<uint8_t>& payload, BalanceResponse& out) {
+    // Controllo di sicurezza sulla dimensione esatta
+    if (payload.size() != 13) return false;
+
+    // 1. Estrazione dello stato
+    uint8_t status_byte = payload[0];
+    if (status_byte > static_cast<uint8_t>(Status::INTERNAL_ERROR)) return false;
+    out.status = static_cast<Status>(status_byte);
+
+    // 2. Estrazione di consumed, remaining e total (da Big-Endian a Host Byte Order)
+    uint32_t consumed_net, remaining_net, total_net;
+
+    memcpy(&consumed_net, payload.data() + 1, 4);
+    out.info.consumed = ntohl(consumed_net);
+
+    memcpy(&remaining_net, payload.data() + 5, 4);
+    out.info.remaining = ntohl(remaining_net);
+
+    memcpy(&total_net, payload.data() + 9, 4);
+    out.info.total = ntohl(total_net);
+
+    return true;
 }
 
 vector<uint8_t> getUserTimestamp() {

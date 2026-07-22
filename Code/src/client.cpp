@@ -224,47 +224,34 @@ vector<uint8_t> auth_response_payload;
     printBanner("Login was succesful, welcome to the service!", BOLD_GREEN);
     
 
-    // -------------------------------------------------------------------------
-    // PHASE 6: APPLICATION LOOP - BALANCE & TIMESTAMP [SPECIFICATIONS]
+// -------------------------------------------------------------------------
+    // PHASE 6: APPLICATION LOOP
     // -------------------------------------------------------------------------
 
-        while(true) {
-            homeMenu();
-            string choice;
-            cin >> choice;
-            if ( choice == "balance") {
-            //call balance function
-            vector<uint8_t> balance = getUserBalance();
-            
-            } 
-            else if (choice == "timestamp"){
-                //call balance fucntion
-                vector<uint8_t> timestamp = getUserTimestamp();
-            }
-
-            else if (choice == "verify") {
-            //call verify function
+    while(true) {
+        homeMenu();
+        string choice;
+        cin >> choice;
+        
+        if (choice == "balance") {
+            getUserBalance(sock, aes_key, aes_iv, seq_num);
+        } 
+        else if (choice == "timestamp"){
+            vector<uint8_t> timestamp = getUserTimestamp();
+        }
+        else if (choice == "verify") {
             vector<uint8_t> verification = userVerification();
-            } 
-
-            else if (choice == "exit") {
-            //call exit function
-
+        } 
+        else if (choice == "exit") {
             printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);
             close(sock);
             return EXIT_SUCCESS; 
-
-            } else {
-                printBanner("Command not recognised, try again.", BOLD_RED);
-            }
+        } 
+        else {
+            printBanner("Command not recognised, try again.", BOLD_RED);
         }
-    
-    // -------------------------------------------------------------------------
-    // PHASE 7: TEARDOWN AND RESOURCE CLEANUP
-    // -------------------------------------------------------------------------
-    // Cleanup resources before exiting
+    }
     
     close(sock);
     return EXIT_SUCCESS;
-    
 }

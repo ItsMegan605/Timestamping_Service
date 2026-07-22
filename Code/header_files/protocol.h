@@ -12,6 +12,7 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
+#include "../header_files/database.h"
 #include <vector>
 #include <string>
 #include <array>
@@ -49,6 +50,10 @@ struct AuthResponse {
     Status status; // OK or AUTH_FAILED
 };
 
+struct BalanceResponse {
+    Status status; // OK or INTERNAL_ERROR
+    TimestampInfo info;
+};
 
 /* not used for now and //TODO: probably to remove
 struct TimestampResponse {
@@ -58,11 +63,7 @@ struct TimestampResponse {
     vector<uint8_t> signature;    // Variable length (DER-encoded ECDSA/RSA signature)
 };
 
-struct BalanceResponse {
-    Status status; // OK or INTERNAL_ERROR
-    uint32_t consumed;
-    uint32_t remaining;
-};
+
 */
 
 // ---------- Serialization Functions (pack) ----------
@@ -90,7 +91,11 @@ bool recv_secure_message(int socket_fd, vector<uint8_t>& out_cleartext, const ve
 
 // -------------- logic functions -----------
 
-vector<uint8_t> getUserBalance();
+void getUserBalance(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num);
+vector<uint8_t> pack_balance_response(const BalanceResponse& res);
+bool unpack_balance_response(const std::vector<uint8_t>& payload, BalanceResponse& out);
+
 vector<uint8_t> getUserTimestamp();
 vector<uint8_t> userVerification();
-#endif // PROTOCOL_H
+
+#endif 
