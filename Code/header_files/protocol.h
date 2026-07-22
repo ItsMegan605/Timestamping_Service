@@ -85,7 +85,8 @@ bool unpack_balance_response(const vector<uint8_t>& data, BalanceResponse& out);
 // ---------- Raw I/O Helpers (over TCP socket, NOT SSL) ----------
 bool send_message(int socket_fd, const vector<uint8_t>& payload);
 bool recv_message(int socket_fd, vector<uint8_t>& out_payload);
-
+bool send_secure_message(int socket_fd, const vector<uint8_t>& cleartext, const vector<uint8_t>& aes_key, vector<uint8_t>& iv, uint64_t& seq_num);
+bool recv_secure_message(int socket_fd, vector<uint8_t>& out_cleartext, const vector<uint8_t>& aes_key, vector<uint8_t>& iv, uint64_t& expected_seq_num);
 
 // -------------- logic functions -----------
 

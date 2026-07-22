@@ -11,7 +11,6 @@ using json = nlohmann::json;
 using namespace std;
 
 int main() {
-    
 //-----------------client preparation ----------------
 
 // first. we eastablish the server connection
@@ -50,6 +49,7 @@ printBanner("[CLIENT] Server connection: please wait...", BOLD_MAGENTA);
     //we have to send them as a message for the hello exchange 
 
 //------------- hello message exchange ----------------------
+
 printBanner("[CLIENT] Sending 'Client Hello' message to the server", BOLD_MAGENTA);
     // Pack and send the Client Hello message
     vector<uint8_t> client_hello_payload = pack_client_hello(epub_c, nc);
@@ -87,6 +87,7 @@ printBanner("[CLIENT] Sending 'Client Hello' message to the server", BOLD_MAGENT
     }
 
 //No KEM since we used diffie hellman on elliptic curves
+
 //--------------------- identity verification and authentication ------------
 
     // Reconstruct the exact transcript signed by the server: (Epub_C || Nc || Ns || Epub_S)
@@ -151,9 +152,9 @@ EVP_PKEY_free(server_conn_pub);
     // Inizializzazione sequence number per prevenire Replay Attacks
     uint64_t seq_num = 0;
     
-    // -------------------------------------------------------------------------
-    //USER AUTHENTICATION IN SECURE CHANNEL (Module: crypto.cpp + protocol.cpp)
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+//USER AUTHENTICATION IN SECURE CHANNEL (Module: crypto.cpp + protocol.cpp)
+// -------------------------------------------------------------------------
 
 printBanner("AUTHENTICATION: please insert your credentials", BOLD_YELLOW);
     //controlli su username e psw
@@ -173,27 +174,24 @@ printBanner("AUTHENTICATION: please insert your credentials", BOLD_YELLOW);
         return EXIT_FAILURE;
     }
 
-
-
     AuthRequest auth_req;
     auth_req.username = username;
     auth_req.password = password;
 
     vector<uint8_t> auth_payload = pack_auth_request(auth_req);
 
-    // 2. Invio credenziali al server
-    if (send_message(sock, auth_payload) != 1) {
-        cerr << "Error sending authentication request" << endl;
+
+    if (!send_secure_message(sock, auth_payload, aes_key, aes_iv, seq_num)) {
+        cerr << "Error securely sending authentication request" << endl;
         OPENSSL_cleanse(&username[0], username.size());
         OPENSSL_cleanse(&password[0], password.size());
         close(sock);
         return EXIT_FAILURE;
     }
 
-    // 3. Ricezione risposta di autenticazione dal server
-    vector<uint8_t> auth_response_payload;
-    if (!recv_message(sock, auth_response_payload)) {
-        cerr << "Error receiving authentication response" << endl;
+vector<uint8_t> auth_response_payload;
+    if (!recv_secure_message(sock, auth_response_payload, aes_key, aes_iv, seq_num)) {
+        cerr << "Error securely receiving authentication response (possible MitM or Replay Attack)" << endl;
         OPENSSL_cleanse(&username[0], username.size());
         OPENSSL_cleanse(&password[0], password.size());
         close(sock);
@@ -225,10 +223,6 @@ printBanner("AUTHENTICATION: please insert your credentials", BOLD_YELLOW);
 
     printBanner("Login was succesful, welcome to the service!", BOLD_GREEN);
     
-    //TODO: for now just testing
-    // 11. Request credentials, encrypt them with AES-256-GCM, and send them
-    // send_secure_message(sock, auth_payload, aes_key, aes_iv, &seq_num);
-    // recv_secure_message(sock, auth_response, aes_key, aes_iv, &seq_num);
 
     // -------------------------------------------------------------------------
     // PHASE 6: APPLICATION LOOP - BALANCE & TIMESTAMP [SPECIFICATIONS]
@@ -239,8 +233,8 @@ printBanner("AUTHENTICATION: please insert your credentials", BOLD_YELLOW);
             string choice;
             cin >> choice;
             if ( choice == "balance") {
-                //call balance function
-                vector<uint8_t> balance = getUserBalance();
+            //call balance function
+            vector<uint8_t> balance = getUserBalance();
             
             } 
             else if (choice == "timestamp"){
@@ -271,7 +265,6 @@ printBanner("AUTHENTICATION: please insert your credentials", BOLD_YELLOW);
     // Cleanup resources before exiting
     
     close(sock);
-    
     return EXIT_SUCCESS;
     
 }

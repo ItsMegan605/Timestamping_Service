@@ -117,10 +117,11 @@ void handle_client(int client_socket) {
     
     uint64_t seq_num = 0;
     
-    //----------------------- authentication phase -----------------------
+//----------------------- authentication phase -----------------------
     vector<uint8_t> authentication;
-    if(!recv_message(client_socket, authentication)) {
-        cerr << "[SERVER:] error while authenticating the user" << endl;
+    // 1. Ricezione sicura delle credenziali
+    if(!recv_secure_message(client_socket, authentication, aes_key, aes_iv, seq_num)) {
+        cerr << "[SERVER ERROR] Error securely receiving authentication request" << endl;
         close(client_socket);
         return;
     }
@@ -137,13 +138,15 @@ void handle_client(int client_socket) {
         printBanner("Authentication succesful!", BOLD_GREEN);
         authResponse.status= Status::OK;
     } else {
-        printBanner("AUthentication failed", BOLD_RED);
+        printBanner("Authentication failed", BOLD_RED);
         authResponse.status = Status::AUTH_FAILED;
     }
 
     vector<uint8_t> authResponsePayload = pack_auth_response(authResponse);
-    if(send_message(client_socket, authResponsePayload) != 1) {
-        cerr << "SERVER ERROR while answering to the request!!" << endl;
+    
+    // 2. Invio sicuro della risposta 
+    if(!send_secure_message(client_socket, authResponsePayload, aes_key, aes_iv, seq_num)) {
+        cerr << "SERVER ERROR securely answering the request!!" << endl;
         return;
     }
 
@@ -201,12 +204,12 @@ int main() {
         struct sockaddr_in client_addr; 
         socklen_t addr_len = sizeof(client_addr);
         
-        // Accept incoming connections and delegate them to a detached thread
+        // Accetta la connessione entrante
         int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &addr_len);
+        
         if (client_fd >= 0) {
-            thread client_thread(handle_client, client_fd);
-            client_thread.detach(); 
+            handle_client(client_fd);
         }
-    }
-    return 0;
+}
+
 }

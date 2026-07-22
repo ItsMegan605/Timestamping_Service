@@ -1,9 +1,12 @@
 #include "../header_files/protocol.h"
+#include "../header_files/crypto.h"
+#include "../header_files/interface.h"
 #include <cstring>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <arpa/inet.h> 
+#include <openssl/rand.h>
 
 using namespace std;
 
@@ -312,15 +315,92 @@ bool unpack_auth_response(const vector<uint8_t>& payload, AuthResponse& out) {
     return true;
 }
 
+//functions to enchypt data so that they are not in the clear
+bool send_secure_message(int socket_fd, const vector<uint8_t>& cleartext, const vector<uint8_t>& aes_key, vector<uint8_t>& iv, uint64_t& seq_num){
+    // Generate a fresh random IV for this specific message (12 bytes is standard for GCM)
+    vector<uint8_t> local_iv(12);
+    if (RAND_bytes(local_iv.data(), 12) != 1) return false;
+
+    vector<uint8_t> ciphertext(cleartext.size() + 16); 
+    vector<uint8_t> tag(16);
+
+    // Encrypt and authenticate, using seq_num as AAD
+    int ciphertext_len = encrypt_aes_gcm_256(
+        cleartext.data(), cleartext.size(),
+        reinterpret_cast<const unsigned char*>(&seq_num), sizeof(seq_num),
+        aes_key.data(), local_iv.data(),
+        ciphertext.data(), tag.data()
+    );
+
+    if (ciphertext_len < 0) return false;
+    ciphertext.resize(ciphertext_len);
+
+    // Assemble the final payload: [12 bytes IV] + [Ciphertext] + [16 bytes TAG]
+    vector<uint8_t> payload_to_send;
+    payload_to_send.insert(payload_to_send.end(), local_iv.begin(), local_iv.end());
+    payload_to_send.insert(payload_to_send.end(), ciphertext.begin(), ciphertext.end());
+    payload_to_send.insert(payload_to_send.end(), tag.begin(), tag.end());
+
+    // Increment sequence number for the next transmission
+    seq_num++;
+
+    // Send over the wire using your existing TCP framing function
+    return send_message(socket_fd, payload_to_send);
+}
+
+
+bool recv_secure_message(int socket_fd, vector<uint8_t>& out_cleartext, const vector<uint8_t>& aes_key, vector<uint8_t>& iv, uint64_t& expected_seq_num) {
+    vector<uint8_t> raw_payload;
+    
+    // Receive the raw bytes from the network
+    if (!recv_message(socket_fd, raw_payload)) return false;
+
+    // Minimum size check: must contain at least a 12-byte IV and a 16-byte TAG
+    if (raw_payload.size() < 28) return false; 
+
+    // Extract the components
+    vector<uint8_t> received_iv(raw_payload.begin(), raw_payload.begin() + 12);
+    vector<uint8_t> received_tag(raw_payload.end() - 16, raw_payload.end());
+    vector<uint8_t> ciphertext(raw_payload.begin() + 12, raw_payload.end() - 16);
+
+    out_cleartext.resize(ciphertext.size());
+
+    // Decrypt and verify authenticity using the expected seq_num as AAD
+    int plaintext_len = decrypt_aes_gcm_256(
+        ciphertext.data(), ciphertext.size(),
+        reinterpret_cast<const unsigned char*>(&expected_seq_num), sizeof(expected_seq_num),
+        aes_key.data(), received_iv.data(),
+        out_cleartext.data(), received_tag.data()
+    );
+
+    // If decrypt returns < 0, the message was tampered with, the key is wrong, or it's a replay attack
+    if (plaintext_len < 0) {
+        out_cleartext.clear();
+        return false;
+    }
+
+    out_cleartext.resize(plaintext_len);
+    
+    // Increment the sequence number for the next reception
+    expected_seq_num++;
+
+    return true;
+}
+
+
+// user requested functions 
 vector<uint8_t> getUserBalance() {
+    printBanner("Balance request submitted. Here is your balance:", BOLD_MAGENTA);
     //todo
 }
 
 vector<uint8_t> getUserTimestamp() {
+    printBanner("Timestamp request submitted.", BOLD_CYAN);
     //todo
 }
 
 vector<uint8_t> userVerification() {
+    printBanner("Let's verify your timestamp.", BOLD_GREEN);
     //todo
 }
 

@@ -534,26 +534,3 @@ if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, (void*)tag) != 1) {
     EVP_CIPHER_CTX_free(ctx);
     return plaintext_len;
 }
-
-
-
-// ==============================================================================
-// TODO BLOCKS: MISSING CRYPTOGRAPHIC ARCHITECTURE (X.509 & AES-GCM)
-// ==============================================================================
-
-// TODO: [X.509 CERTIFICATE MANAGEMENT]
-// Add functions to handle X.509 certificates to comply with the architecture specs:
-// 1. `X509* load_certificate(const string& filepath)`
-//    Uses `PEM_read_X509` to load a certificate from disk (used by the Server).
-// 2. `vector<uint8_t> serialize_certificate(X509* cert)`
-//    Uses `i2d_X509` to encode the certificate to DER format for network transmission.
-// 3. `X509* deserialize_certificate(const vector<uint8_t>& cert_bytes)`
-//    Uses `d2i_X509` to decode the received DER bytes into an X509 object (used by the Client).
-// 4. `EVP_PKEY* extract_pubkey_from_cert(X509* cert)`
-//    Uses `X509_get_pubkey` to securely extract the long-term public key to verify signatures.
-// 5. `bool verify_certificate(X509* cert, const string& ca_cert_filepath)`
-//    - Creates a store: `X509_STORE_new()`
-//    - Loads the CA root: `X509_STORE_add_cert()`
-//    - Creates context: `X509_STORE_CTX_new()` and `X509_STORE_CTX_init()`
-//    - Validates: `X509_verify_cert()`
-//    - Cleans up memory.

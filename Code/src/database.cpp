@@ -52,12 +52,18 @@ void UserDatabase::save_to_file() {
 bool UserDatabase::authenticate(const string& username, const string& password) {
     for (const auto& u : users) {
         if (u.username == username) {
-            // Uses sha256_data defined in crypto.h
+            // Calculate the hash of the salted password
             string salted_psw = u.salt + password;
             array<uint8_t, 32> hash_bytes = sha256_data(salted_psw);
             string calculated_hash = bytes_to_hex(hash_bytes);
 
-            return (u.password_hash == calculated_hash);
+            //Prevent Timing Attacks using constant-time comparison
+            if (u.password_hash.size() != calculated_hash.size()) {
+                return false; 
+            }
+            
+            // CRYPTO_memcmp returns 0 if the memory blocks are identical
+            return CRYPTO_memcmp(u.password_hash.data(), calculated_hash.data(), calculated_hash.size()) == 0;
         }
     }
     return false; // User not found
