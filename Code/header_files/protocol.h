@@ -77,8 +77,6 @@ vector<uint8_t> pack_timestamp_request(const TimestampRequest& req);
 // ---------- Deserialization Functions (unpack) ----------
 bool unpack_auth_request(const vector<uint8_t>& payload, AuthRequest& out);
 bool unpack_auth_response(const vector<uint8_t>& payload, AuthResponse& out);
-bool unpack_timestamp_response(const vector<uint8_t>& data, TimestampResponse& out);
-bool unpack_balance_response(const vector<uint8_t>& data, BalanceResponse& out);
 
 // ---------- Raw I/O Helpers (over TCP socket, NOT SSL) ----------
 bool send_message(int socket_fd, const vector<uint8_t>& payload);
@@ -90,10 +88,12 @@ bool recv_secure_message(int socket_fd, vector<uint8_t>& out_cleartext, const ve
 
 void getUserBalance(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num);
 vector<uint8_t> pack_balance_response(const BalanceResponse& res);
-vector<uint8_t> pack_timestamp_response(const TimestampResponse& res);
-bool unpack_balance_response(const std::vector<uint8_t>& payload, BalanceResponse& out);
+bool unpack_balance_response(const vector<uint8_t>& payload, BalanceResponse& out);
 
 void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num);
+vector<uint8_t> pack_timestamp_response(const TimestampResponse& res);
+bool unpack_timestamp_response(const vector<uint8_t>& data, TimestampResponse& out);
+
 void userVerification(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num);
 
 #endif 

@@ -4,7 +4,6 @@
 #include "../header_files/database.h"
 #include "../header_files/common.h"
 
-
 #include <cstring>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -621,5 +620,46 @@ bool unpack_timestamp_response(const vector<uint8_t>& payload, TimestampResponse
 
 void userVerification(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num) {
     printBanner("Let's verify your timestamp.", BOLD_GREEN);
-    // TODO
+
+    string fileToVerify;
+    cout << "Plase insert the name of the file that you want to verify: \n" << endl;
+    
+    cin >> fileToVerify;
+
+    if (fileToVerify.empty()){
+        cerr << "ERROR: the file is empty and cannot be verified." << endl;
+        return;
+    }
+
+    if (fileToVerify.find('/') != string::npos){
+        cerr << "ERROR: please insert only the file name, not the path." << endl;
+        return;
+    }
+
+    //we need the correct folder to allow the researc
+    //not 100% sure about the folder path
+    string inputFolder = "./timestamp_docs";
+    string outputFolder = "./timestamped_docs";
+
+    cout << "Calculating the hash of the file..." << endl;
+
+    string fullPath = inputFolder + "/" + fileToVerify; //for the correct path
+
+    array<uint8_t, 32> currentHashFile = sha256_file(fullPath);
+    if (currentHashFile.empty()){
+        cerr << "Error in finding the file" << endl;
+        return;
+    }
+
+    
+    //vado a cercare il certificato salavto prima
+
+    //parsing json
+    //estraggo i campi hash e tempo
+
+    //controllo se corrisponde
+
+    //poi se tutto ok stampo banner 
+    verificationCompleted();
+
 }

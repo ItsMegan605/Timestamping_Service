@@ -38,13 +38,15 @@ bool UserDatabase::load_from_file(const string& filepath) {
     }
 }
 
-// Saves the state of the users vector to the JSON file
 void UserDatabase::save_to_file() {
-    ofstream file(db_filepath);
+    string tmp_filepath = db_filepath + ".tmp";
+    ofstream file(tmp_filepath);
     if (file.is_open()) {
         json j;
         j["users"] = users;
         file << j.dump(4);
+        file.close();
+        std::rename(tmp_filepath.c_str(), db_filepath.c_str());
     }
 }
 

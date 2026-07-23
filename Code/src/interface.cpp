@@ -1,5 +1,6 @@
 #include "../header_files/interface.h"
 #include "../header_files/database.h"
+#include "../header_files/protocol.h"
 #include <iostream>
 #include <unistd.h>
 #include <cstdlib>
@@ -38,5 +39,14 @@ void balance(const TimestampInfo& info){
     std::cout << BOLD_CYAN << " Remaining Timestamps  " << RESET << info.remaining << "\n";
     std::cout << BOLD_CYAN<< " Used Timestamps    " << RESET << info.consumed << "\n" ;
     std::cout << BOLD_CYAN << " Total Timestamps  " << RESET << info.total << "\n";
+    std::cout << BOLD_MAGENTA << "----------------------------------------" << RESET << "\n";
+}
+
+void verificationCompleted(){ //add the filename
+    std::cout << "\n" << BOLD_MAGENTA << "========================================" << RESET << "\n";
+    std::cout << BOLD_MAGENTA << "           VERIFICATION COMPLEATED             " << RESET << "\n";
+    std::cout << BOLD_MAGENTA << "========================================" << RESET << "\n";
+    std::cout << BOLD_CYAN << "the file is authentic" << RESET << "\n";
+    std::cout << BOLD_CYAN << "It was marked by the server correctly" << RESET << "\n";
     std::cout << BOLD_MAGENTA << "----------------------------------------" << RESET << "\n";
 }

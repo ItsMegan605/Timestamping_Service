@@ -240,11 +240,10 @@ void handle_client(int client_socket) {
     close(client_socket);
 }
 
-
+// --------------------- mian code --------------------------------------
 
 int main() {
 
-    // Caricamento del database JSON prima di accettare connessioni
     if (!db.load_from_file("../data/users.json")) {
         cerr << "[SERVER ERROR] Impossibile caricare users.json" << endl;
         return EXIT_FAILURE;
@@ -256,7 +255,6 @@ int main() {
         return EXIT_FAILURE;
     }   
     
-    //opening of the connection
     int server_fd = setup_server(DEFAULT_PORT);
     if (server_fd < 0) return EXIT_FAILURE;
     
