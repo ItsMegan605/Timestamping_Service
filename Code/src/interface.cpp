@@ -44,7 +44,7 @@ void balance(const TimestampInfo& info){
 
 void verificationCompleted(){ //add the filename
     std::cout << "\n" << BOLD_MAGENTA << "========================================" << RESET << "\n";
-    std::cout << BOLD_MAGENTA << "           VERIFICATION COMPLEATED             " << RESET << "\n";
+    std::cout << BOLD_MAGENTA << "           VERIFICATION COMPLETED             " << RESET << "\n";
     std::cout << BOLD_MAGENTA << "========================================" << RESET << "\n";
     std::cout << BOLD_CYAN << "the file is authentic" << RESET << "\n";
     std::cout << BOLD_CYAN << "It was marked by the server correctly" << RESET << "\n";

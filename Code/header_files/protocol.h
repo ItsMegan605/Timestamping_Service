@@ -1,13 +1,3 @@
-/**
- * protocol.h - Defines the exact wire format and serialization functions.
- * TODO: Declare structs for each request/response.
- * TODO: Declare pack() and unpack() functions for each message type.
- *       All integers must be serialized in network byte order (big-endian).
- * 
- * NOTE: All messages are sent over a raw TCP socket (not TLS/SSL).
- *       The payload is already encrypted with AES-GCM before calling send_message().
- *       The send/recv helpers only add a length prefix and handle I/O.
- */
 
 #ifndef PROTOCOL_H
 #define PROTOCOL_H

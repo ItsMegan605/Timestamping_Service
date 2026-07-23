@@ -5,6 +5,10 @@
 #include "../header_files/common.h"
 
 #include <cstring>
+#include <iostream>
+#include <sys/stat.h>
+#include <fstream>
+#include <nlohmann/json.hpp>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
@@ -482,12 +486,35 @@ bool unpack_balance_response(const vector<uint8_t>& payload, BalanceResponse& ou
 
 void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num) {
     printBanner("Timestamp request submitted.", BOLD_CYAN);
-    std::string filepath;
-    cout << "Enter the path to the file you want to timestamp: ";
-    cin >> filepath;
+    
+    std::string filename;
+    cout << "Enter the name of the file you want to timestamp: ";
+    cin >> filename;
 
-    // copute the SHA-256 hash of the file
-    array<uint8_t, 32> hash = sha256_file(filepath);
+    
+    if(filename.empty()) {
+        cerr << "[CLIENT ERROR] Filename cannot be empty." << endl;
+        return;
+    }
+    
+    if(filename.find('/') != string::npos || filename.find('\\') != string::npos || filename.find("..") != string::npos) {
+        cerr << "[CLIENT ERROR] please enter the filename not the path" << endl;
+        return;
+    }
+    if (filename.find('.') == string::npos) {
+        filename += ".txt";
+    }
+    // define the folder where the timestamped files will be saved the input and output
+    string inputFolder = "../timestamp_docs";
+    string outputFolder = "../timestamped_docs";
+    
+
+    string fullPath = inputFolder + "/" + filename; // for the correct path
+    string jsonFilePath = outputFolder + "/" + filename + ".json";
+    
+    
+    // compute the SHA-256 hash of the file
+    array<uint8_t, 32> hash = sha256_file(fullPath);
     if(hash[0] == 0 && hash[1] == 0 && hash[2] == 0 && hash[3] == 0) {
         cerr << "[CLIENT ERROR] Failed to compute SHA-256 hash of the file." << endl;
         return;
@@ -540,18 +567,48 @@ void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>&
     EVP_PKEY_free(ts_pubk);
 
     if (valid_sig) {
-        printBanner("[CLIENT] Timestamp verification successful!", BOLD_GREEN);
-        cout << "Hash: ";
-        for (uint8_t byte : resp.hash) {
-            printf("%02x", byte);
-        }
-        cout << "\nTime: " << resp.timestamp << " (Unix epoch seconds)" << endl; 
-        cout << "Signature (hex): ";
-        for (uint8_t byte : resp.signature) {
-            printf("%02x", byte);
-        }
-        cout << endl;
+        printBanner("[CLIENT] Timestamp process successful!", BOLD_GREEN);
+
+    string Hash_Value;
+    for(uint8_t byte : resp.hash) {
+        char buf[3]; // buffer to hold the hex representation of a byte
+        snprintf(buf, sizeof(buf), "%02x", byte); // convert byte to hex and store in buffer
+        Hash_Value += buf;
     }
+
+    
+    // converts the signature to hex for JSON storage
+    string Signature;
+    for(uint8_t byte : resp.signature) {
+        char buf[3]; // buffer to hold the hex representation of a byte
+        snprintf(buf, sizeof(buf), "%02x", byte);
+        Signature += buf;
+    }
+    
+    // builds the JSON object to store the timestamp information
+    json jsonTimestamp;
+    jsonTimestamp["Hash Value"] = Hash_Value;
+    jsonTimestamp["Timing"] = to_string(resp.timestamp);
+    jsonTimestamp["Signature"] = Signature;
+    
+    // checks if the folder exists, if it doesn't creates it
+    if(mkdir(outputFolder.c_str(), 0755) != 0 && errno != EEXIST) // 0755 is the permission for the folder
+    {
+        cerr << "[CLIENT ERROR] Failed to create output folder." << endl;
+        return;
+    }
+
+    // writes the JSON object to a file
+    ofstream jsonFile(jsonFilePath);
+    if (!jsonFile.is_open()) {
+        cerr << "[CLIENT ERROR] Failed to open JSON file for writing. "<< endl;
+        return;
+    }
+    jsonFile << jsonTimestamp.dump(4); // pretty print with 4 spaces indentation
+    jsonFile.close();
+    cout << "[CLIENT] Timestamp information saved. "<< endl;
+    }
+    
     else {
         printBanner("[CLIENT ERROR] Timestamp VERIFICATION FAILED!", BOLD_RED);
     }
@@ -636,30 +693,95 @@ void userVerification(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>&
         return;
     }
 
+    if (fileToVerify.find('.') == string::npos) {
+        fileToVerify += ".txt";
+    }
+
     //we need the correct folder to allow the researc
     //not 100% sure about the folder path
-    string inputFolder = "./timestamp_docs";
-    string outputFolder = "./timestamped_docs";
+    string inputFolder = "../timestamp_docs";
+    string outputFolder = "../timestamped_docs";
 
     cout << "Calculating the hash of the file..." << endl;
 
     string fullPath = inputFolder + "/" + fileToVerify; //for the correct path
-
+    string jsonFilePath = outputFolder + "/" + fileToVerify + ".json";
+    
     array<uint8_t, 32> currentHashFile = sha256_file(fullPath);
-    if (currentHashFile.empty()){
-        cerr << "Error in finding the file" << endl;
+    if (currentHashFile[0] == 0 && currentHashFile[1] == 0 && currentHashFile[2] == 0 && currentHashFile[3] == 0){
+        cerr << "Error in finding or reading the file" << endl;
         return;
     }
 
-    
+
     //vado a cercare il certificato salavto prima
-
+    ifstream fileStream(jsonFilePath);
+    if(!fileStream.is_open()) {
+        cerr << "the document hasn't been timestamped yet, sorry." << endl;
+        return;
+    }
     //parsing json
-    //estraggo i campi hash e tempo
+    json jsonTimestamp;
+    try {
+        fileStream >> jsonTimestamp;
+    } catch (const json::parse_error& ex) {
+        printBanner("The file was corrupted or wrong!", BOLD_RED);
+        return;
+    }
+    fileStream.close();
 
-    //controllo se corrisponde
+    string hash;
+    string time;
+    string signature;
 
-    //poi se tutto ok stampo banner 
-    verificationCompleted();
+    try{
+        hash = jsonTimestamp.at("Hash Value").get<string>();
+        time = jsonTimestamp.at("Timing").get<string>();
+        signature = jsonTimestamp.at("Signature").get<string>();
 
+    } catch (const exception& e){
+        cerr << "The certificate hash wrong or missing fields!" << endl;
+        return;
+    }
+
+char hexBuffer[65]; 
+    for (int i = 0; i < 32; i++) {
+        snprintf(&hexBuffer[i * 2], 3, "%02x", currentHashFile[i]); 
+    }
+    string currentHashHex(hexBuffer);
+
+    if (currentHashHex != hash) {
+        printBanner("THE FILE WAS MODIFIED: the current hash doesn't correspond with the original one!\n", BOLD_RED);
+        return;
+    } 
+    
+    printBanner("The file was not altered, nice job mate. Proceeding with signature verification...", BOLD_GREEN);
+    
+
+    vector<uint8_t> signatureBinary;
+    for (size_t i = 0; i < signature.length(); i += 2) {
+        signatureBinary.push_back(static_cast<uint8_t>(stoul(signature.substr(i, 2), nullptr, 16)));
+    }
+
+    vector<uint8_t> dataToVerify(40);
+    memcpy(dataToVerify.data(), currentHashFile.data(), 32); 
+    
+    uint64_t ts_net = htobe64(stoull(time)); // Converte il tempo di nuovo in network byte order
+    memcpy(dataToVerify.data() + 32, &ts_net, 8); 
+
+    EVP_PKEY* ts_pubk = load_public_key("../keys/server_ts_pub.pem");
+    if (!ts_pubk) {
+        cerr << "Error: impossible to load the public key for verification." << endl;
+        return;
+    }
+
+    bool isValid = verify_signature(dataToVerify, signatureBinary, ts_pubk);
+    EVP_PKEY_free(ts_pubk);
+
+    if (isValid) {
+        printBanner("Verification completed: The timestamp is VALID and AUTHENTIC!", BOLD_GREEN);
+        verificationCompleted();
+    } else {
+        printBanner("CRYPTOGRAPHIC ERROR: The server signature does not match! The JSON was forged.", BOLD_RED);
+    }
 }

@@ -1,9 +1,9 @@
 {
     "users": [
         {
-            "consumed": 4,
+            "consumed": 6,
             "password_hash": "733b166ed1f583638af010a2fc8114ff3a5e2e73901d64dc99bc4758c4fe0590",
-            "remaining": 6,
+            "remaining": 4,
             "salt": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
             "total": 10,
             "username": "student"
