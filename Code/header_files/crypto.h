@@ -22,7 +22,6 @@ bool verify_signature(const vector<uint8_t>& data, const vector<uint8_t>& signat
 
 // --- SHA-256 Hashing ---
 array<uint8_t, 32> sha256_data(const vector<uint8_t>& data);
-array<uint8_t, 32> sha256_data(const string& data);
 array<uint8_t, 32> sha256_file(const string& filename);
 
 // --- Key Loading ---
@@ -36,18 +35,8 @@ bool derive_shared_secret(EVP_PKEY* priv_key, EVP_PKEY* peer_pub_key, vector<uin
 bool hkdf_extract_expand(const vector<uint8_t>& shared_secret,
                         const vector<uint8_t>& client_nonce,
                         const vector<uint8_t>& server_nonce,
-                        vector<uint8_t>& out_enc_key,
-                        vector<uint8_t>& out_iv);
+                        vector<uint8_t>& out_enc_key);
 
-// --- AES-GCM 256 ---
-int encrypt_aes_gcm_256(const unsigned char *plaintext, int plaintext_len,
-                        const unsigned char *aad, int aad_len,
-                        const unsigned char *key, const unsigned char *iv,
-                        unsigned char *ciphertext, unsigned char *tag);
 
-int decrypt_aes_gcm_256(const unsigned char *ciphertext, int ciphertext_len,
-                        const unsigned char *aad, int aad_len,
-                        const unsigned char *key, const unsigned char *iv,
-                        unsigned char *plaintext, unsigned char *tag);
 
 #endif // CRYPTO_H

@@ -56,7 +56,9 @@ bool UserDatabase::authenticate(const string& username, const string& password) 
         if (u.username == username) {
             // Calculate the hash of the salted password
             string salted_psw = u.salt + password;
-            array<uint8_t, 32> hash_bytes = sha256_data(salted_psw);
+            // Converte la stringa in un vector<uint8_t> per adattarsi alla firma in crypto.cpp
+            vector<uint8_t> psw_vec(salted_psw.begin(), salted_psw.end());
+            array<uint8_t, 32> hash_bytes = sha256_data(psw_vec);
             string calculated_hash = bytes_to_hex(hash_bytes);
 
             //Prevent Timing Attacks using constant-time comparison

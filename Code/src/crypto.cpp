@@ -22,38 +22,20 @@ using namespace std;
 
 /**
  * sha256_data
- * Computes the SHA-256 hash of a raw byte vector using the OpenSSL EVP API.
+ * Computes the SHA-256 hash of a raw byte vector safely and compactly.
  */
 array<uint8_t, 32> sha256_data(const vector<uint8_t>& data) {
     array<uint8_t, 32> hash = {}; 
-
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-    if (!ctx) {
-        cerr << "ERROR: failed to create hash context" << endl;
-        return hash; 
-    }
+    
+    if (!ctx) return hash; // Controllo di sicurezza essenziale
 
-    if (EVP_DigestInit_ex(ctx, EVP_sha256(), NULL) != 1) {
-        cerr << "ERROR: failed to initialize SHA-256" << endl;
-        EVP_MD_CTX_free(ctx);
-        return hash; 
-    }
-
-    if (EVP_DigestUpdate(ctx, data.data(), data.size()) != 1) {
-        cerr << "ERROR: failed to update SHA-256 with data" << endl;
-        EVP_MD_CTX_free(ctx); 
-        return hash;
-    }
-
-    unsigned int hash_len = 0;
-    if (EVP_DigestFinal_ex(ctx, hash.data(), &hash_len) != 1 ) {
-        cerr << "ERROR: failed to finalize SHA-256" << endl;
-        EVP_MD_CTX_free(ctx);
-        return hash;
-    }
-
-    if (hash_len != 32) {
-        cerr << "ERROR: unexpected hash length: " << hash_len << endl;
+    // Concateniamo le operazioni. Se una fallisce, salta le successive.
+    if (EVP_DigestInit_ex(ctx, EVP_sha256(), NULL) == 1 &&
+        EVP_DigestUpdate(ctx, data.data(), data.size()) == 1) {
+        
+        unsigned int digest_len = 0;
+        EVP_DigestFinal_ex(ctx, hash.data(), &digest_len);
     }
 
     EVP_MD_CTX_free(ctx);
@@ -61,74 +43,43 @@ array<uint8_t, 32> sha256_data(const vector<uint8_t>& data) {
 }
 
 /**
- * sha256_data (overload)
- * Convenience wrapper to compute the SHA-256 hash of a std::string.
- * Useful for hashing salted passwords.
- */
-array<uint8_t, 32> sha256_data(const string& data) {
-    vector<uint8_t> bytes(data.begin(), data.end());
-    return sha256_data(bytes);
-}
-
-/**
  * sha256_file
- * Computes the SHA-256 hash of a file's contents.
- * Reads the file in 8KB chunks to maintain a low RAM footprint regardless of file size.
+ * Computes the SHA-256 hash of a file's contents safely and compactly.
  */
 array<uint8_t, 32> sha256_file(const string& filename) {
     array<uint8_t, 32> hash = {}; 
 
     FILE* file = fopen(filename.c_str(), "rb");
-    if (!file) {
-        cerr << "ERROR: failed to open file: " << filename << endl;
-        return hash; 
-    }
+    if (!file) return hash;
 
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     if (!ctx) {
-        cerr << "ERROR: failed to create hash context" << endl;
         fclose(file);
-        return hash; 
+        return hash;
     }
 
-    if (EVP_DigestInit_ex(ctx, EVP_sha256(), NULL) != 1) {
-        cerr << "ERROR: failed to initialize SHA-256" << endl;
-        EVP_MD_CTX_free(ctx);
-        fclose(file);
-        return hash; 
-    }
+    if (EVP_DigestInit_ex(ctx, EVP_sha256(), NULL) == 1) {
+        const size_t buffer_size = 8192; 
+        vector<uint8_t> buffer(buffer_size);
+        size_t bytes_read = 0;
+        bool success = true;
 
-    const size_t buffer_size = 8192; 
-    vector<uint8_t> buffer(buffer_size);
-    size_t bytes_read = 0;
-
-    while ((bytes_read = fread(buffer.data(), 1, buffer_size, file)) > 0) {
-        if (EVP_DigestUpdate(ctx, buffer.data(), bytes_read) != 1) {
-            cerr << "ERROR: failed to update SHA-256 from file chunk" << endl;
-            EVP_MD_CTX_free(ctx);
-            fclose(file);
-            return hash; 
+        // Manteniamo il ciclo di lettura a blocchi: è obbligatorio per i file!
+        while ((bytes_read = fread(buffer.data(), 1, buffer_size, file)) > 0) {
+            if (EVP_DigestUpdate(ctx, buffer.data(), bytes_read) != 1) {
+                success = false;
+                break;
+            }
         }
-    }
 
-    if (ferror(file)) {
-        cerr << "ERROR: error reading file while hashing: " << filename << endl;
-        EVP_MD_CTX_free(ctx);
-        fclose(file);
-        return hash; 
-    }
-
-    unsigned int hash_len = 0;
-    if (EVP_DigestFinal_ex(ctx, hash.data(), &hash_len) != 1 ) {
-        cerr << "ERROR: failed to finalize SHA-256 for file" << endl;
-        EVP_MD_CTX_free(ctx);
-        fclose(file);
-        return hash; 
+        if (success && !ferror(file)) {
+            unsigned int digest_len = 0;
+            EVP_DigestFinal_ex(ctx, hash.data(), &digest_len);
+        }
     }
 
     EVP_MD_CTX_free(ctx);
     fclose(file);
-
     return hash;
 }
 
@@ -398,139 +349,44 @@ static vector<uint8_t> hkdf_expand(const array<uint8_t, 32>& prk, const string& 
 bool hkdf_extract_expand(const vector<uint8_t>& shared_secret, 
                         const vector<uint8_t>& client_nonce,
                         const vector<uint8_t>& server_nonce, 
-                        vector<uint8_t>& out_enc_key,
-                        vector<uint8_t>& out_iv) {
+                        vector<uint8_t>& out_enc_key) {
 
     if (shared_secret.empty() || client_nonce.size() != NONCE_SIZE || server_nonce.size() != NONCE_SIZE) {
         cerr << "ERROR: Invalid inputs to HKDF" << endl;
         return false;
     }
 
+    // 1. Prepare the salt using both nonces
     vector<uint8_t> salt;
     salt.reserve(NONCE_SIZE * 2);
     salt.insert(salt.end(), client_nonce.begin(), client_nonce.end());
     salt.insert(salt.end(), server_nonce.begin(), server_nonce.end());
 
+    // 2. Extract step: create the PRK
     array<uint8_t, 32> prk = hkdf_extract(salt, shared_secret);
 
+    // 3. Expand step: generate exactly 32 bytes for AES-256
     const size_t AES_KEY_LEN = 32;
-    const size_t IV_LEN = 12;
-    const size_t TOTAL_LEN = AES_KEY_LEN + IV_LEN;
     const string info = "tss_session_key";
 
-    vector<uint8_t> expanded = hkdf_expand(prk, info, TOTAL_LEN);
+    vector<uint8_t> expanded = hkdf_expand(prk, info, AES_KEY_LEN);
 
-    if (expanded.size() != TOTAL_LEN) {
+    if (expanded.size() != AES_KEY_LEN) {
         cerr << "ERROR: HKDF-Expand produced unexpected length" << endl;
+        OPENSSL_cleanse(prk.data(), prk.size());
         return false;
     }
 
-    out_enc_key.assign(expanded.begin(), expanded.begin() + AES_KEY_LEN);
-    out_iv.assign(expanded.begin() + AES_KEY_LEN, expanded.end());
+    // 4. Assign the generated key
+    out_enc_key.assign(expanded.begin(), expanded.end());
 
-    // TODO: (PFS) Explicitly clear the PRK and expanded buffers from memory before returning
-    // OPENSSL_cleanse(prk.data(), prk.size());
-    // OPENSSL_cleanse(expanded.data(), expanded.size());
+    // 5. Perfect Forward Secrecy: wipe intermediate secrets from RAM
+    OPENSSL_cleanse(prk.data(), prk.size());
+    OPENSSL_cleanse(expanded.data(), expanded.size());
 
     return true; 
 }
 
 
-// ===========================================================================
-// AES_GCM_256 - symmetric crypto
-// ===========================================================================
-int encrypt_aes_gcm_256 (const unsigned char *plaintext, int plaintext_len,
-                        const unsigned char *aad, int aad_len,
-                        const unsigned char *key, const unsigned char *iv,
-                        unsigned char *ciphertext, unsigned char *tag) {
-
-EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-if (!ctx){
-    cerr << "Error" << endl;
-    return -1;
-    }
-
-    int len = 0;
-    int ciphertext_len = 0;
-
-if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) != 1 ||
-        EVP_EncryptInit_ex(ctx, NULL, NULL, key, iv) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return -1;
-    }
-
-if (aad && aad_len > 0) {
-        if (EVP_EncryptUpdate(ctx, NULL, &len, aad, aad_len) != 1) {
-            EVP_CIPHER_CTX_free(ctx);
-            return -1;
-        }
-    }
-
-    if (EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return -1;
-    }
-    ciphertext_len = len;
-
-    if (EVP_EncryptFinal_ex(ctx, ciphertext + ciphertext_len, &len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return -1;
-    }
-    ciphertext_len += len;
-
-    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return -1;
-    }
-
-    EVP_CIPHER_CTX_free(ctx);
-    return ciphertext_len;
-}
 
 
-int decrypt_aes_gcm_256 (const unsigned char *ciphertext, int ciphertext_len,
-                        const unsigned char *aad, int aad_len,
-                        const unsigned char *key, const unsigned char *iv,
-                        unsigned char *plaintext, unsigned char *tag) {
-
-EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-if (!ctx){
-    cerr << "Error" << endl;
-    return -1;
-    }
-
-    int len = 0;
-    int plaintext_len = 0;
-
-if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, key, iv) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return -1;
-    }
-
-if (aad && aad_len > 0) {
-        if (EVP_DecryptUpdate(ctx, NULL, &len, aad, aad_len) != 1 ){
-    EVP_CIPHER_CTX_free(ctx);
-    return -1;
-    }
-}
-
-    if (EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return -1;
-    }
-    plaintext_len = len;
-
-if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, (void*)tag) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return -1;
-    }
-
-    if (EVP_DecryptFinal_ex(ctx, plaintext + plaintext_len, &len) <= 0) {
-        EVP_CIPHER_CTX_free(ctx);
-        return -1; 
-    }
-    plaintext_len += len;
-
-    EVP_CIPHER_CTX_free(ctx);
-    return plaintext_len;
-}

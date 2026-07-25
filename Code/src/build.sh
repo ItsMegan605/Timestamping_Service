@@ -10,7 +10,7 @@ for src_file in *.cpp; do
     
     echo "Compilazione di $src_file -> ${obj_name}.o"
     # Il flag -c istruisce g++ a compilare senza fare il linking
-    g++ -std=c++17 -Wall -c -lcrypto "$src_file" -o "${obj_name}.o"
+    g++ -std=c++20 -Wall -c -lcrypto "$src_file" -o "${obj_name}.o"
 done
 
 echo ""
@@ -20,14 +20,14 @@ echo "=== Avvio fase di linking (OpenSSL) ==="
 # Unisce server.o con i moduli condivisi e database.o
 if [ -f "server.o" ]; then
     echo "Linking del Server..."
-    g++ -std=c++17 server.o crypto.o connection.o protocol.o database.o interface.o -o server -lssl -lcrypto 
+    g++ -std=c++20 server.o crypto.o connection.o protocol.o database.o interface.o -o server -lssl -lcrypto 
 fi
 
 # 3. Crea l'eseguibile del Client 
 # Unisce client.o con i moduli condivisi (escludendo database.o e server.o)
 if [ -f "client.o" ]; then
     echo "Linking del Client..."
-    g++ -std=c++17 client.o crypto.o connection.o protocol.o interface.o -o client -lssl -lcrypto 
+    g++ -std=c++20 client.o crypto.o connection.o protocol.o interface.o -o client -lssl -lcrypto 
 fi
 
 

@@ -105,9 +105,8 @@ void handle_client(int client_socket) {
 // -------------- key derivation function (KDF) ---------------
     
     vector<uint8_t> aes_key;
-    vector<uint8_t> aes_iv;
     
-    if (!hkdf_extract_expand(shared_secret, nc, ns, aes_key, aes_iv)) {
+    if (!hkdf_extract_expand(shared_secret, nc, ns, aes_key)) {
         cerr << "Critical error: HKDF derivation failed" << endl;
         OPENSSL_cleanse(shared_secret.data(), shared_secret.size());
         close(client_socket);
@@ -122,7 +121,7 @@ void handle_client(int client_socket) {
 //----------------------- authentication phase -----------------------
     vector<uint8_t> authentication;
     // 1. Ricezione sicura delle credenziali
-    if(!recv_secure_message(client_socket, authentication, aes_key, aes_iv, seq_num)) {
+    if(!recv_secure_message(client_socket, authentication, aes_key, seq_num)) {
         cerr << "[SERVER ERROR] Error securely receiving authentication request" << endl;
         close(client_socket);
         return;
@@ -136,9 +135,11 @@ void handle_client(int client_socket) {
     }
 
     AuthResponse authResponse;
-    if(db.authenticate(authRequest.username, authRequest.password)){
+    bool is_authenticated = db.authenticate(authRequest.username, authRequest.password);
+
+    if(is_authenticated){
         printBanner("Authentication succesful!", BOLD_GREEN);
-        authResponse.status= Status::OK;
+        authResponse.status = Status::OK;
     } else {
         printBanner("Authentication failed", BOLD_RED);
         authResponse.status = Status::AUTH_FAILED;
@@ -147,45 +148,49 @@ void handle_client(int client_socket) {
     vector<uint8_t> authResponsePayload = pack_auth_response(authResponse);
     
     // 2. Invio sicuro della risposta 
-    if(!send_secure_message(client_socket, authResponsePayload, aes_key, aes_iv, seq_num)) {
+    if(!send_secure_message(client_socket, authResponsePayload, aes_key, seq_num)) {
         cerr << "SERVER ERROR securely answering the request!!" << endl;
+        close(client_socket);
         return;
     }
 
+    if (!is_authenticated) {
+        close(client_socket);
+        return;
+    }
+
+    // =========================================================================
+    // APPLICATION LOOP (Balance, Timestamp, Exit)
+    // =========================================================================
     while (true) {
         vector<uint8_t> encrypted_cmd;
         
-        // 1. Securely wait for the next command from the client
-        if (!recv_secure_message(client_socket, encrypted_cmd, aes_key, aes_iv, seq_num)) {
+        if (!recv_secure_message(client_socket, encrypted_cmd, aes_key, seq_num)) {
             cout << "[SERVER] Client disconnected or secure channel error." << endl;
             break;
         }
 
         if (encrypted_cmd.empty()) continue;
 
-        // 2. Read the command type (e.g., the first byte sent by the client)
         char command_type = static_cast<char>(encrypted_cmd[0]);
 
         if (command_type == 'B') { 
             BalanceResponse res;
             
-            // Interroghiamo il database usando l'username dell'utente autenticato in sessione
             if (db.get_balance(authRequest.username, res.info)) {
                 res.status = Status::OK;
             } else {
                 res.status = Status::INTERNAL_ERROR;
             }
 
-            // Serializziamo la risposta
             vector<uint8_t> balance_payload = pack_balance_response(res);
 
-            if (!send_secure_message(client_socket, balance_payload, aes_key, aes_iv, seq_num)) {
+            if (!send_secure_message(client_socket, balance_payload, aes_key, seq_num)) {
                 cerr << "[SERVER ERROR] Impossible to send balance response" << endl;
                 break;
             }
         }
         else if (command_type == 'T') { 
-            // TODO: Handle timestamp consumption logic and digital signature
             if (encrypted_cmd.size() < 1 + 32) { // command byte + 32-byte hash
                 cerr << "[SERVER ERROR] Invalid timestamp request length" << endl;
                 break;
@@ -222,7 +227,7 @@ void handle_client(int client_socket) {
 
             // packs and sends the response
             vector<uint8_t> ts_response_payload = pack_timestamp_response(ts_res);
-            if (!send_secure_message(client_socket, ts_response_payload, aes_key, aes_iv, seq_num)) {
+            if (!send_secure_message(client_socket, ts_response_payload, aes_key, seq_num)) {
                 cerr << "[SERVER ERROR] Impossible to send timestamp response" << endl;
                 break;
             }
@@ -232,10 +237,7 @@ void handle_client(int client_socket) {
             break;
         }
     }
-    // Cleanup resources
-    // TODO: Consider using RAII (std::unique_ptr with custom deleters) for EVP_PKEY 
-    // to avoid memory leaks if early returns occur in the logic above.
-// Cleanup resources
+
 
     close(client_socket);
 }

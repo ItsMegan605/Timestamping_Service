@@ -4,6 +4,7 @@
 
 #include "../header_files/database.h"
 #include <vector>
+#include <filesystem>
 #include <string>
 #include <array>
 #include <cstdint>
@@ -71,19 +72,20 @@ bool unpack_auth_response(const vector<uint8_t>& payload, AuthResponse& out);
 // ---------- Raw I/O Helpers (over TCP socket, NOT SSL) ----------
 bool send_message(int socket_fd, const vector<uint8_t>& payload);
 bool recv_message(int socket_fd, vector<uint8_t>& out_payload);
-bool send_secure_message(int socket_fd, const vector<uint8_t>& cleartext, const vector<uint8_t>& aes_key, vector<uint8_t>& iv, uint64_t& seq_num);
-bool recv_secure_message(int socket_fd, vector<uint8_t>& out_cleartext, const vector<uint8_t>& aes_key, vector<uint8_t>& iv, uint64_t& expected_seq_num);
+
+bool send_secure_message(int socket_fd, const vector<uint8_t>& cleartext, const vector<uint8_t>& aes_key, uint64_t& seq_num);
+bool recv_secure_message(int socket_fd, vector<uint8_t>& out_cleartext, const vector<uint8_t>& aes_key, uint64_t& expected_seq_num);
 
 // -------------- logic functions -----------
 
-void getUserBalance(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num);
+void getUserBalance(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num);
 vector<uint8_t> pack_balance_response(const BalanceResponse& res);
 bool unpack_balance_response(const vector<uint8_t>& payload, BalanceResponse& out);
 
-void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num);
+void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num);
 vector<uint8_t> pack_timestamp_response(const TimestampResponse& res);
 bool unpack_timestamp_response(const vector<uint8_t>& data, TimestampResponse& out);
 
-void userVerification(int sock, const vector<uint8_t>& aes_key, vector<uint8_t>& aes_iv, uint64_t& seq_num);
+void userVerification(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num);
 
 #endif 

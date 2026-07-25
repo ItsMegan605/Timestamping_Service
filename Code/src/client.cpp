@@ -11,11 +11,26 @@ using json = nlohmann::json;
 using namespace std;
 
 int main() {
+
+int sock = -1; 
+vector<uint8_t> aes_key;
+uint64_t seq_num = 0;
+    
+// -------------------------------------------------------------------------
+// user choices 
+// -------------------------------------------------------------------------
+
+while(true) {
+    serviceEntry();
+    string choice;
+    cin >> choice;
+    if( choice == "login") {
+
 //-----------------client preparation ----------------
 
 // first. we eastablish the server connection
 printBanner("[CLIENT] Server connection: please wait...", BOLD_MAGENTA);
-    int sock = server_connection(IP_ADDRESS, DEFAULT_PORT);
+    sock = server_connection(IP_ADDRESS, DEFAULT_PORT);
     if (sock < 0) {
     cerr << "[CLIENT ERROR] Unable to connect to the server." << endl;
     return EXIT_FAILURE;
@@ -77,7 +92,6 @@ printBanner("[CLIENT] Sending 'Client Hello' message to the server", BOLD_MAGENT
 
     // Unpack the Server Hello to extract Epub_S, Ns, and the signature
     vector<uint8_t> epub_s, ns, signature;
-    // TODO: (Protocol) Modify unpack_server_hello to also extract the Server Certificate (in DER format).
     if (!unpack_server_hello(server_hello_payload, epub_s, ns, signature)) {
         cerr << "Error parsing Server Hello" << endl;
         EVP_PKEY_free(server_conn_pub);
@@ -130,13 +144,9 @@ EVP_PKEY_free(server_conn_pub);
     // Deallocazione della chiave effimera del client, il segreto è stato estratto
     EVP_PKEY_free(client_eph_key);
 
-// -------------- key derivation function (KDF) ---------------
-
-    vector<uint8_t> aes_key;
-    vector<uint8_t> aes_iv;
-    
+// -------------- key derivation function (KDF) --------------- 
     // 1. Chiamata alla HKDF per generare le chiavi AES
-    if (!hkdf_extract_expand(shared_secret, nc, ns, aes_key, aes_iv)) {
+    if (!hkdf_extract_expand(shared_secret, nc, ns, aes_key)) {
         cerr << "Critical error: HKDF derivation failed" << endl;
         OPENSSL_cleanse(shared_secret.data(), shared_secret.size());
         close(sock);
@@ -149,14 +159,8 @@ EVP_PKEY_free(server_conn_pub);
     // Il canale è sicuro solo in questo momento
     printBanner("[CLIENT] Handshake completed! Secure channel active.", BOLD_GREEN);
     
-    // Inizializzazione sequence number per prevenire Replay Attacks
-    uint64_t seq_num = 0;
-    
-// -------------------------------------------------------------------------
-//USER AUTHENTICATION IN SECURE CHANNEL (Module: crypto.cpp + protocol.cpp)
-// -------------------------------------------------------------------------
 
-printBanner("AUTHENTICATION: please insert your credentials", BOLD_YELLOW);
+    //metterci la connessione nel momento in cui faccio login 
     //controlli su username e psw
     string username;
     string password;
@@ -181,7 +185,7 @@ printBanner("AUTHENTICATION: please insert your credentials", BOLD_YELLOW);
     vector<uint8_t> auth_payload = pack_auth_request(auth_req);
 
 
-    if (!send_secure_message(sock, auth_payload, aes_key, aes_iv, seq_num)) {
+    if (!send_secure_message(sock, auth_payload, aes_key, seq_num)) {
         cerr << "Error securely sending authentication request" << endl;
         OPENSSL_cleanse(&username[0], username.size());
         OPENSSL_cleanse(&password[0], password.size());
@@ -190,7 +194,7 @@ printBanner("AUTHENTICATION: please insert your credentials", BOLD_YELLOW);
     }
 
 vector<uint8_t> auth_response_payload;
-    if (!recv_secure_message(sock, auth_response_payload, aes_key, aes_iv, seq_num)) {
+    if (!recv_secure_message(sock, auth_response_payload, aes_key, seq_num)) {
         cerr << "Error securely receiving authentication response (possible MitM or Replay Attack)" << endl;
         OPENSSL_cleanse(&username[0], username.size());
         OPENSSL_cleanse(&password[0], password.size());
@@ -198,7 +202,6 @@ vector<uint8_t> auth_response_payload;
         return EXIT_FAILURE;
     }
 
-    // 4. Spacchettamento risposta
     AuthResponse auth_res;
     if (unpack_auth_response(auth_response_payload, auth_res) != 1) {
         cerr << "Invalid authentication response format from server" << endl;
@@ -208,13 +211,12 @@ vector<uint8_t> auth_response_payload;
         return EXIT_FAILURE;
     }
 
-    // 5. Verifica esito del login
     if (auth_res.status != Status::OK) {
         cerr << "[CLIENT] Login failed: invalid credentials" << endl;
         OPENSSL_cleanse(&username[0], username.size());
         OPENSSL_cleanse(&password[0], password.size());
         close(sock);
-        return EXIT_FAILURE;
+        continue;
     }
 
     // Pulizia delle credenziali in chiaro dalla memoria RAM
@@ -222,11 +224,24 @@ vector<uint8_t> auth_response_payload;
     OPENSSL_cleanse(&password[0], password.size());
 
     printBanner("Login was succesful, welcome to the service!", BOLD_GREEN);
-    
+    break;
 
+    } else if (choice == "verify") {
+        userVerification(sock, aes_key, seq_num);
+
+    } else if (choice == "exit") {
+        printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);
+        close(sock);
+        return EXIT_SUCCESS; 
+    } else {
+        printBanner("Command not recognised, try again.", BOLD_RED);
+    }
+
+}
+    
 // -------------------------------------------------------------------------
-    // PHASE 6: APPLICATION LOOP
-    // -------------------------------------------------------------------------
+// PHASE 6: APPLICATION LOOP
+// -------------------------------------------------------------------------
 
     while(true) {
         homeMenu();
@@ -234,13 +249,13 @@ vector<uint8_t> auth_response_payload;
         cin >> choice;
         
         if (choice == "balance") {
-            getUserBalance(sock, aes_key, aes_iv, seq_num);
+            getUserBalance(sock, aes_key, seq_num);
         } 
         else if (choice == "timestamp"){
-            getUserTimestamp( sock, aes_key, aes_iv, seq_num);
+            getUserTimestamp( sock, aes_key, seq_num);
         }
         else if (choice == "verify") {
-            userVerification(sock, aes_key, aes_iv, seq_num);
+            userVerification(sock, aes_key, seq_num);
         } 
         else if (choice == "exit") {
             printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);

@@ -4,7 +4,8 @@
 #include <iostream>
 #include <unistd.h>
 #include <cstdlib>
-
+#include <chrono>
+#include <format>
 using namespace std;
 
 void printBanner(const std::string& message, const std::string& color) {
@@ -17,6 +18,18 @@ void printBanner(const std::string& message, const std::string& color) {
     cout << " |  " << message << "  |\n";
     cout << " +" << border << "+\n";
     cout << RESET << std::endl;
+}
+
+void serviceEntry(){
+    std::cout << "\n" << BOLD_MAGENTA << "========================================" << RESET << "\n";
+    std::cout << BOLD_MAGENTA << "            HELLO! WELCOME             " << RESET << "\n";
+    std::cout << BOLD_MAGENTA << "========================================" << RESET << "\n";
+    std::cout << BOLD_WHITE << "Available options:\n" << RESET;
+    std::cout << BOLD_CYAN<< " 1. login    " << RESET << "- Request your balance\n";
+    std::cout << BOLD_CYAN << " 2. verify     " << RESET << "- Verify Timestamp\n";
+    std::cout << BOLD_CYAN << " 3. exit       " << RESET << "- Close the service\n";
+    std::cout << BOLD_MAGENTA << "----------------------------------------" << RESET << "\n";
+    std::cout << BOLD_GREEN << "Insert your choice: " << RESET;
 }
 
 void homeMenu(){
@@ -42,11 +55,23 @@ void balance(const TimestampInfo& info){
     std::cout << BOLD_MAGENTA << "----------------------------------------" << RESET << "\n";
 }
 
-void verificationCompleted(){ //add the filename
+void verificationCompleted(const string& timestamp_str){ //add the filename
     std::cout << "\n" << BOLD_MAGENTA << "========================================" << RESET << "\n";
     std::cout << BOLD_MAGENTA << "           VERIFICATION COMPLETED             " << RESET << "\n";
     std::cout << BOLD_MAGENTA << "========================================" << RESET << "\n";
     std::cout << BOLD_CYAN << "the file is authentic" << RESET << "\n";
     std::cout << BOLD_CYAN << "It was marked by the server correctly" << RESET << "\n";
+    try {
+        uint64_t raw_time = std::stoull(timestamp_str);
+        std::chrono::seconds duration_secs(raw_time);
+        std::chrono::system_clock::time_point tp(duration_secs);
+        auto local_time = std::chrono::zoned_time{std::chrono::current_zone(), tp};
+        
+        std::cout << BOLD_GREEN << "Timestamp: " << std::format("{:%Y-%m-%d %H:%M:%S}", local_time) << RESET << "\n";
+    } catch (...) {
+        std::cout << BOLD_RED << "Timestamp: " << timestamp_str << " (Raw)" << RESET << "\n";
+    }
+
     std::cout << BOLD_MAGENTA << "----------------------------------------" << RESET << "\n";
+
 }
