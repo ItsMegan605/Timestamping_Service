@@ -17,6 +17,7 @@ const std::string BOLD_WHITE   = "\033[1;37m";
 void printBanner(const std::string& message, const std::string& color = BOLD_CYAN);
 void serviceEntry();
 void homeMenu();
+void timestampCompleted(const std::string& filename, const std::string& hash_hex, uint64_t raw_time, const std::string& signature_hex);
 void balance(const TimestampInfo& info);
 void verificationCompleted(const std::string& timestamp_str);
 

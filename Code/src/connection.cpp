@@ -16,12 +16,7 @@ using namespace std;
 // CLIENT SIDE
 // ==============================================================================
 
-/**
- * server_connection
- * 
- * Establishes a blocking TCP connection to the specified server IP and port.
- * Returns the connected socket file descriptor on success, or -1 on failure.
- */
+//server connection
 int server_connection(const char *ip, int port) {
     // Create an IPv4 (AF_INET) and TCP (SOCK_STREAM) socket.
     int client_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -60,12 +55,7 @@ int server_connection(const char *ip, int port) {
 // SERVER SIDE
 // ==============================================================================
 
-/**
- * setup_server
- * 
- * Sets up a passive listening TCP socket on the specified port.
- * Returns the listening socket file descriptor on success, or -1 on failure.
- */
+//set up of the server
 int setup_server(int port) {
     // Create an IPv4 (AF_INET) and TCP (SOCK_STREAM) socket.
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -74,9 +64,6 @@ int setup_server(int port) {
         return -1;
     }
 
-    // Configure the socket to allow immediate port reuse.
-    // This bypasses the TCP TIME_WAIT state, preventing "Address already in use" 
-    // errors if the server is killed and restarted immediately.
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         cerr << "Warning: setsockopt SO_REUSEADDR failed" << endl;
@@ -109,28 +96,3 @@ int setup_server(int port) {
     // Return the passive socket descriptor, ready to be passed to accept().
     return server_fd;
 }
-
-// ==============================================================================
-// TODO BLOCKS: MODERN C++ RAII ENCAPSULATION
-// ==============================================================================
-
-// TODO: [RAII SOCKET MANAGEMENT]
-// Currently, the socket descriptors are returned as raw raw integers (`int`). 
-// If an exception is thrown or a function returns early somewhere else in the code, 
-// the `close(socket_fd)` call might be missed, causing a resource leak.
-// 
-// To make this 100% modern C++, consider creating a `SocketWrapper` class 
-// or using a `std::unique_ptr` with a custom deleter to manage the file descriptor.
-// 
-// Example:
-// class SocketWrapper {
-//     int fd;
-// public:
-//     explicit SocketWrapper(int descriptor) : fd(descriptor) {}
-//     ~SocketWrapper() { if (fd >= 0) close(fd); }
-//     int get() const { return fd; }
-//     void release() { fd = -1; }
-//     // Delete copy constructor and copy assignment to enforce unique ownership
-//     SocketWrapper(const SocketWrapper&) = delete;
-//     SocketWrapper& operator=(const SocketWrapper&) = delete;
-// };

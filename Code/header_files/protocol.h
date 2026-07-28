@@ -14,7 +14,6 @@ using namespace std;
 
 
 // ---------------------- handshake  ------------------------------
-
 vector<uint8_t> pack_client_hello(const vector<uint8_t>& epub_c, const vector<uint8_t>& nc);
 bool unpack_client_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_epub_c, vector<uint8_t>& out_nc);
 
@@ -32,9 +31,6 @@ struct TimestampRequest {
     array<uint8_t, 32> hash;  // SHA-256 hash of the document
 };
 
-// (Balance request has no payload, just the command byte)
-
-
 
 // ---------- Response Structs ----------
 struct AuthResponse {
@@ -46,7 +42,6 @@ struct BalanceResponse {
     TimestampInfo info;
 };
 
-
 struct TimestampResponse {
     Status status;                  // OK, QUOTA_EXHAUSTED, or INTERNAL_ERROR
     array<uint8_t, 32> hash;
@@ -54,22 +49,16 @@ struct TimestampResponse {
     vector<uint8_t> signature;      // Variable length (DER-encoded ECDSA/RSA signature)
 };
 
-
-
-
 // ---------- Serialization Functions (pack) ----------
 vector<uint8_t> pack_auth_request(const AuthRequest& req);
 vector<uint8_t> pack_auth_response(const AuthResponse& res);
 vector<uint8_t> pack_timestamp_request(const TimestampRequest& req);
-// Balance request is just the command byte, so no pack function needed
-
-
 
 // ---------- Deserialization Functions (unpack) ----------
 bool unpack_auth_request(const vector<uint8_t>& payload, AuthRequest& out);
 bool unpack_auth_response(const vector<uint8_t>& payload, AuthResponse& out);
 
-// ---------- Raw I/O Helpers (over TCP socket, NOT SSL) ----------
+// ---------- send and receive ----------
 bool send_message(int socket_fd, const vector<uint8_t>& payload);
 bool recv_message(int socket_fd, vector<uint8_t>& out_payload);
 
@@ -77,7 +66,6 @@ bool send_secure_message(int socket_fd, const vector<uint8_t>& cleartext, const 
 bool recv_secure_message(int socket_fd, vector<uint8_t>& out_cleartext, const vector<uint8_t>& aes_key, uint64_t& expected_seq_num);
 
 // -------------- logic functions -----------
-
 void getUserBalance(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num);
 vector<uint8_t> pack_balance_response(const BalanceResponse& res);
 bool unpack_balance_response(const vector<uint8_t>& payload, BalanceResponse& out);

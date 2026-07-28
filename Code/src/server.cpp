@@ -158,8 +158,7 @@ void handle_client(int client_socket) {
         close(client_socket);
         return;
     }
-
-    // =========================================================================
+// =========================================================================
     // APPLICATION LOOP (Balance, Timestamp, Exit)
     // =========================================================================
     while (true) {
@@ -175,8 +174,9 @@ void handle_client(int client_socket) {
         char command_type = static_cast<char>(encrypted_cmd[0]);
 
         if (command_type == 'B') { 
-            BalanceResponse res;
+            cout << "[SERVER] Received BALANCE request from user: " << authRequest.username << endl;
             
+            BalanceResponse res;
             if (db.get_balance(authRequest.username, res.info)) {
                 res.status = Status::OK;
             } else {
@@ -189,55 +189,62 @@ void handle_client(int client_socket) {
                 cerr << "[SERVER ERROR] Impossible to send balance response" << endl;
                 break;
             }
+            cout << "[SERVER] BALANCE response successfully sent to the client." << endl;
         }
         else if (command_type == 'T') { 
-            if (encrypted_cmd.size() < 1 + 32) { // command byte + 32-byte hash
+            cout << "[SERVER] Received TIMESTAMP request from user: " << authRequest.username << endl;
+            
+            if (encrypted_cmd.size() < 1 + 32) {
                 cerr << "[SERVER ERROR] Invalid timestamp request length" << endl;
                 break;
             }
-
+            
             TimestampRequest ts_req;
             memcpy(ts_req.hash.data(), encrypted_cmd.data() + 1, 32);
-
+                    
             TimestampResponse ts_res;
             ts_res.hash = ts_req.hash;
-
-            // tries to consume a timestamp from the user's quota
-            if (!db.consume_timestamp(authRequest.username)) {
+                    
+            TimestampInfo info;
+            
+            if (!db.get_balance(authRequest.username, info) || info.remaining == 0) {
                 ts_res.status = Status::QUOTA_EXHAUSTED;
                 ts_res.timestamp = 0;
                 ts_res.signature.clear();
+                cout << "[SERVER] Warning: user " << authRequest.username << " has exhausted their credits!" << endl;
             } else {
-                ts_res.status = Status::OK;
-                ts_res.timestamp = static_cast<uint64_t>(time(nullptr)); // current Unix time
-
-                // builds the signed data: hash(32) + timestamp (8)
-                // uses host byte order for signing; client will convert to network byte order for verification
-                vector<uint8_t> signed_data(40); // hash (32 bytes) + timestamp (8 bytes)
+                ts_res.timestamp = static_cast<uint64_t>(time(nullptr)); 
+            
+                vector<uint8_t> signed_data(40);
                 memcpy(signed_data.data(), ts_req.hash.data(), 32);
                 uint64_t ts_net = htobe64(ts_res.timestamp);
                 memcpy(signed_data.data() + 32, &ts_net, 8);
-
-                // signs using the server's timestamping private key
+            
                 ts_res.signature = sign_data(signed_data, ts_privk);
+                
                 if (ts_res.signature.empty()) {
                     ts_res.status = Status::INTERNAL_ERROR;
+                    cerr << "[SERVER ERROR] Error during cryptographic signing!" << endl;
+                } else {
+                    db.consume_timestamp(authRequest.username);
+                    ts_res.status = Status::OK;
+                    cout << "[SERVER] Cryptographic signature generated. Credits deducted for user " << authRequest.username << "." << endl;
                 }
             }
 
-            // packs and sends the response
             vector<uint8_t> ts_response_payload = pack_timestamp_response(ts_res);
             if (!send_secure_message(client_socket, ts_response_payload, aes_key, seq_num)) {
                 cerr << "[SERVER ERROR] Impossible to send timestamp response" << endl;
                 break;
             }
+            // Add this line to confirm the transmission
+            cout << "[SERVER] TIMESTAMP response encrypted and successfully sent." << endl;
         }
-        else if (command_type == 'E') { // Example for Exit / Graceful Logout
+        else if (command_type == 'E') { 
             cout << "[SERVER] Received session close request from user." << endl;
             break;
         }
     }
-
 
     close(client_socket);
 }

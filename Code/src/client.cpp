@@ -14,8 +14,8 @@ int main() {
 
 int sock = -1; 
 vector<uint8_t> aes_key;
-uint64_t seq_num = 0;
-    
+uint64_t seq_num = 0;  
+
 // -------------------------------------------------------------------------
 // user choices 
 // -------------------------------------------------------------------------
@@ -26,9 +26,9 @@ while(true) {
     cin >> choice;
     if( choice == "login") {
 
-//-----------------client preparation ----------------
+//----------------- initiating client preparation ----------------
 
-// first. we eastablish the server connection
+// first, we eastablish the server connection
 printBanner("[CLIENT] Server connection: please wait...", BOLD_MAGENTA);
     sock = server_connection(IP_ADDRESS, DEFAULT_PORT);
     if (sock < 0) {
@@ -49,6 +49,7 @@ printBanner("[CLIENT] Server connection: please wait...", BOLD_MAGENTA);
 
     // Generate Client Nonce (Nc) and ephemeral ECDH key pair
     vector<uint8_t> nc = generate_nonce(NONCE_SIZE);
+
     //Generate ephemeral ECDH key pair for Perfect Forward Secrecy (PFS)
     EVP_PKEY* client_eph_key = generate_ephemeral_key();
 
@@ -121,6 +122,7 @@ printBanner("[CLIENT] Sending 'Client Hello' message to the server", BOLD_MAGENT
     }
     
 EVP_PKEY_free(server_conn_pub);
+
 // -------------- secret deriving ---------------
 
     // Derive the ECDH Shared Secret
@@ -145,7 +147,7 @@ EVP_PKEY_free(server_conn_pub);
     EVP_PKEY_free(client_eph_key);
 
 // -------------- key derivation function (KDF) --------------- 
-    // 1. Chiamata alla HKDF per generare le chiavi AES
+    // generating aes keys
     if (!hkdf_extract_expand(shared_secret, nc, ns, aes_key)) {
         cerr << "Critical error: HKDF derivation failed" << endl;
         OPENSSL_cleanse(shared_secret.data(), shared_secret.size());
@@ -153,15 +155,10 @@ EVP_PKEY_free(server_conn_pub);
         return EXIT_FAILURE;
     }
 
-    // 2. Pulizia del segreto matematico dalla RAM per Perfect Forward Secrecy
     OPENSSL_cleanse(shared_secret.data(), shared_secret.size());
 
-    // Il canale è sicuro solo in questo momento
     printBanner("[CLIENT] Handshake completed! Secure channel active.", BOLD_GREEN);
     
-
-    //metterci la connessione nel momento in cui faccio login 
-    //controlli su username e psw
     string username;
     string password;
 
@@ -187,8 +184,8 @@ EVP_PKEY_free(server_conn_pub);
 
     if (!send_secure_message(sock, auth_payload, aes_key, seq_num)) {
         cerr << "Error securely sending authentication request" << endl;
-        OPENSSL_cleanse(&username[0], username.size());
-        OPENSSL_cleanse(&password[0], password.size());
+        std::fill(username.begin(), username.end(), '\0');
+        std::fill(password.begin(), password.end(), '\0');
         close(sock);
         return EXIT_FAILURE;
     }
@@ -196,8 +193,8 @@ EVP_PKEY_free(server_conn_pub);
 vector<uint8_t> auth_response_payload;
     if (!recv_secure_message(sock, auth_response_payload, aes_key, seq_num)) {
         cerr << "Error securely receiving authentication response (possible MitM or Replay Attack)" << endl;
-        OPENSSL_cleanse(&username[0], username.size());
-        OPENSSL_cleanse(&password[0], password.size());
+        std::fill(username.begin(), username.end(), '\0');
+        std::fill(password.begin(), password.end(), '\0');
         close(sock);
         return EXIT_FAILURE;
     }
@@ -205,23 +202,22 @@ vector<uint8_t> auth_response_payload;
     AuthResponse auth_res;
     if (unpack_auth_response(auth_response_payload, auth_res) != 1) {
         cerr << "Invalid authentication response format from server" << endl;
-        OPENSSL_cleanse(&username[0], username.size());
-        OPENSSL_cleanse(&password[0], password.size());
+        std::fill(username.begin(), username.end(), '\0');
+        std::fill(password.begin(), password.end(), '\0');
         close(sock);
         return EXIT_FAILURE;
     }
 
     if (auth_res.status != Status::OK) {
         cerr << "[CLIENT] Login failed: invalid credentials" << endl;
-        OPENSSL_cleanse(&username[0], username.size());
-        OPENSSL_cleanse(&password[0], password.size());
+        std::fill(username.begin(), username.end(), '\0');
+        std::fill(password.begin(), password.end(), '\0');
         close(sock);
         continue;
     }
 
-    // Pulizia delle credenziali in chiaro dalla memoria RAM
-    OPENSSL_cleanse(&username[0], username.size());
-    OPENSSL_cleanse(&password[0], password.size());
+        std::fill(username.begin(), username.end(), '\0');
+        std::fill(password.begin(), password.end(), '\0');
 
     printBanner("Login was succesful, welcome to the service!", BOLD_GREEN);
     break;
@@ -229,10 +225,12 @@ vector<uint8_t> auth_response_payload;
     } else if (choice == "verify") {
         userVerification(sock, aes_key, seq_num);
 
-    } else if (choice == "exit") {
-        printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);
-        close(sock);
-        return EXIT_SUCCESS; 
+    }else if (choice == "exit") {
+    printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);
+    vector<uint8_t> exit_payload = {'E'};
+    send_secure_message(sock, exit_payload, aes_key, seq_num);
+    close(sock);
+    return EXIT_SUCCESS; 
     } else {
         printBanner("Command not recognised, try again.", BOLD_RED);
     }
@@ -240,7 +238,7 @@ vector<uint8_t> auth_response_payload;
 }
     
 // -------------------------------------------------------------------------
-// PHASE 6: APPLICATION LOOP
+// APPLICATION LOOP - effective funcitons called by user
 // -------------------------------------------------------------------------
 
     while(true) {
@@ -259,9 +257,11 @@ vector<uint8_t> auth_response_payload;
         } 
         else if (choice == "exit") {
             printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);
+            vector<uint8_t> exit_payload = {'E'};
+            send_secure_message(sock, exit_payload, aes_key, seq_num); 
             close(sock);
             return EXIT_SUCCESS; 
-        } 
+        }
         else {
             printBanner("Command not recognised, try again.", BOLD_RED);
         }

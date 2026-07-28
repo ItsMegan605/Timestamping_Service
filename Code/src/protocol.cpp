@@ -23,14 +23,7 @@ using namespace std;
 // RAW TCP FRAMING FUNCTIONS
 // ==============================================================================
 
-/**
- * send_message
- * 
- * Sends a raw message over the socket using a Length-Value framing approach.
- * It calculates the payload size, converts it to Network Byte Order (Big-Endian)
- * to ensure cross-architecture compatibility, prepends this 4-byte header to the
- * payload, and pushes everything through the TCP socket.
- */
+//raw send message 
 bool send_message(int socket_fd, const vector<uint8_t>& payload) {
     uint32_t payload_len = static_cast<uint32_t>(payload.size());
     if (payload_len > MAX_MESSAGE_SIZE) return false;   
@@ -59,19 +52,12 @@ bool send_message(int socket_fd, const vector<uint8_t>& payload) {
     return true;
 }
 
-/**
- * recv_message
- * 
- * Receives a message by first reading exactly 4 bytes to determine the payload 
- * length, converts it back to Host Byte Order, allocates the necessary memory, 
- * and then reads the exact amount of payload bytes. 
- * Includes protection against Out-Of-Memory (OOM) attacks.
- */
+//raw receive message
 bool recv_message(int socket_fd, vector<uint8_t>& out_payload) {
     uint8_t len_buf[4];
     size_t total_received = 0;
 
-    // 1. Read the 4-byte length header
+    //Read the 4-byte length header
     while (total_received < 4) {
         ssize_t bytes_recv = recv(socket_fd, len_buf + total_received, 4 - total_received, 0);
         if (bytes_recv <= 0) return false;
@@ -87,13 +73,13 @@ bool recv_message(int socket_fd, vector<uint8_t>& out_payload) {
         return true;
     }
     
-    // Security check: drop excessively large messages
+    //Security check: drop excessively large messages
     if (payload_len > MAX_MESSAGE_SIZE) return false;
 
     out_payload.resize(payload_len);
     total_received = 0;
 
-    // 2. Read exactly payload_len bytes from the socket
+    //Read exactly payload_len bytes from the socket
     while (total_received < payload_len) {
         ssize_t bytes_recv = recv(socket_fd, out_payload.data() + total_received, payload_len - total_received, 0);
         if (bytes_recv <= 0) return false;
@@ -103,16 +89,8 @@ bool recv_message(int socket_fd, vector<uint8_t>& out_payload) {
 }
 
 
-// ==============================================================================
-// HANDSHAKE SERIALIZATION (UNENCRYPTED)
-// ==============================================================================
-
-/**
- * pack_client_hello
- * 
- * Serializes the Client Hello parameters.
- * Format: [2 bytes key len] + [Epub_C] + [Nonce_C]
- */
+//Serializes the Client Hello parameters.
+//Format: [2 bytes key len] + [Epub_C] + [Nonce_C]
 vector<uint8_t> pack_client_hello(const vector<uint8_t>& epub_c, const vector<uint8_t>& nc) {
     vector<uint8_t> buffer;
     uint16_t key_len = htons(static_cast<uint16_t>(epub_c.size()));
@@ -127,11 +105,7 @@ vector<uint8_t> pack_client_hello(const vector<uint8_t>& epub_c, const vector<ui
     return buffer;
 }
 
-/**
- * unpack_client_hello
- * 
- * Deserializes the Client Hello parameters, verifying strict boundaries.
- */
+//Deserializes the Client Hello parameters, verifying strict boundaries.
 bool unpack_client_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_epub_c, vector<uint8_t>& out_nc) {
     if (payload.size() < 2) return false;
     
@@ -148,15 +122,11 @@ if (payload.size() != static_cast<size_t>(2 + key_len + NONCE_SIZE)) return fals
     return true;
 }
 
-/**
- * pack_server_hello
- * 
- * Serializes the Server Hello parameters.
- * Current Format: [2 bytes key len] + [Epub_S] + [Nonce_S] + [2 bytes sig len] + [Signature]
- */
+
+//Serializes the Server Hello parameters.
+// Current Format: [2 bytes key len] + [Epub_S] + [Nonce_S] + [2 bytes sig len] + [Signature]
+
 vector<uint8_t> pack_server_hello(const vector<uint8_t>& epub_s, const vector<uint8_t>& ns, const vector<uint8_t>& signature) {
-    // Modify this function to accept `const vector<uint8_t>& cert_der` as a parameter.
-    // The new format should be: [2B cert len] + [Certificate] + [2B key len] + [Epub_S] + [Nonce_S] + [2B sig len] + [Signature]
     
     vector<uint8_t> buffer;
     uint16_t key_len = htons(static_cast<uint16_t>(epub_s.size()));
@@ -180,13 +150,9 @@ vector<uint8_t> pack_server_hello(const vector<uint8_t>& epub_s, const vector<ui
     return buffer;
 }
 
-/**
- * unpack_server_hello
- * 
- * Deserializes the Server Hello parameters sequentially using an offset tracker.
- */
+//Deserializes the Server Hello parameters sequentially using an offset tracker.
+
 bool unpack_server_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_epub_s, vector<uint8_t>& out_ns, vector<uint8_t>& out_signature) {
-    // corresponding to the changes in pack_server_hello. Add `vector<uint8_t>& out_cert` to parameters.
     
     if (payload.size() < 2) return false;
     size_t offset = 0;
@@ -219,16 +185,9 @@ bool unpack_server_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_ep
 }
 
 
-// ==============================================================================
-// APPLICATION LAYER SERIALIZATION (ENCRYPTED VIA SECURE CHANNEL)
-// ==============================================================================
+// Serializes the authentication credentials.
+// Format: [2 bytes username len] + [username] + [2 bytes password len] + [password]
 
-/**
- * pack_auth_request
- * 
- * Serializes the authentication credentials.
- * Format: [2 bytes username len] + [username] + [2 bytes password len] + [password]
- */
 vector<uint8_t> pack_auth_request(const AuthRequest& req) {
     vector<uint8_t> out;
 
@@ -253,11 +212,7 @@ vector<uint8_t> pack_auth_request(const AuthRequest& req) {
     return out;
 }
 
-/**
- * unpack_auth_request
- * 
- * Deserializes the authentication credentials, protecting against invalid lengths.
- */
+// Deserializes the authentication credentials, protecting against invalid lengths.
 bool unpack_auth_request(const vector<uint8_t>& payload, AuthRequest& out) {
     if (payload.size() < 4) return false; 
     
@@ -293,20 +248,12 @@ bool unpack_auth_request(const vector<uint8_t>& payload, AuthRequest& out) {
     return true;
 }
 
-/**
- * pack_auth_response
- * 
- * Serializes the authentication response. It is a single byte representing the Status enum.
- */
+//Serializes the authentication response. It is a single byte representing the Status enum.
 vector<uint8_t> pack_auth_response(const AuthResponse& res) {
     return vector<uint8_t>{static_cast<uint8_t>(res.status)};
 }
 
-/**
- * unpack_auth_response
- * 
- * Deserializes the authentication response, validating the Status enum range.
- */
+//Deserializes the authentication response, validating the Status enum range.
 bool unpack_auth_response(const vector<uint8_t>& payload, AuthResponse& out) {
     if (payload.size() != 1) return false; 
     
@@ -324,39 +271,34 @@ bool unpack_auth_response(const vector<uint8_t>& payload, AuthResponse& out) {
 
 using namespace std;
 
-// External function used to send bytes over the socket
 
 bool send_secure_message(int socket_fd, const vector<uint8_t>& cleartext, const vector<uint8_t>& aes_key, uint64_t& seq_num) {
     
-    const size_t IV_SIZE = 12; // Cambiato in size_t
-    const size_t TAG_SIZE = 16; // Cambiato in size_t
-    
-    // Calcoliamo la dimensione massima del plaintext per non superare il limite del socket
+    const size_t IV_SIZE = 12; 
+    const size_t TAG_SIZE = 16; 
+    //calculate max pt dimention to not overflow the dimention
     const size_t MAX_PLAINTEXT_SIZE = MAX_MESSAGE_SIZE - IV_SIZE - TAG_SIZE;
 
-    // Controllo unificato: impedisce vettori vuoti e buffer overflow
+//control to avoiud buffer overflow
     if (cleartext.empty() || cleartext.size() > MAX_PLAINTEXT_SIZE) {
         cerr << "[ERROR] CAN'T ENCRYPT, INVALID INPUT PARAMETERS! Payload size: " 
             << cleartext.size() << " bytes." << endl;
         return false;
     }
 
-    size_t mess_len = cleartext.size(); // Cambiato in size_t
+    size_t mess_len = cleartext.size(); 
     
-    // 1. Pre-allocate a single buffer for the entire payload
     vector<uint8_t> payload_buffer(IV_SIZE + mess_len + TAG_SIZE);
-    // 2. Pointer mapping exactly as in your example
     unsigned char* iv = payload_buffer.data();
     unsigned char* ciphertext = payload_buffer.data() + IV_SIZE;
     unsigned char* tag = payload_buffer.data() + IV_SIZE + mess_len;
 
-    // 3. Generate the IV directly in the dedicated memory portion
+    //Generate the IV directly in the dedicated memory portion
     if (RAND_bytes(iv, IV_SIZE) != 1) {
         cerr << "[ERROR] IV generation failed." << endl;
         return false;
     }
 
-    // 4. OpenSSL Initialization
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (!ctx) return false;
 
@@ -369,13 +311,13 @@ bool send_secure_message(int socket_fd, const vector<uint8_t>& cleartext, const 
         return false;
     }
 
-    // 5. Insert Sequence Number as AAD (Additional Authenticated Data)
+    //Insert Sequence Number as AAD (Additional Authenticated Data)
     if (EVP_EncryptUpdate(ctx, NULL, &len, reinterpret_cast<const unsigned char*>(&seq_num), sizeof(seq_num)) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return false;
     }
 
-    // 6. Direct encryption into the "ciphertext" portion of the buffer
+    //Direct encryption into the "ciphertext" portion of the buffer
     if (EVP_EncryptUpdate(ctx, ciphertext, &len, cleartext.data(), mess_len) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return false;
@@ -388,7 +330,7 @@ bool send_secure_message(int socket_fd, const vector<uint8_t>& cleartext, const 
     }
     ciphertext_len += len;
 
-    // 7. Extract the TAG directly into the tail of the buffer
+    //Extract the TAG directly into the tail of the buffer
     if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, TAG_SIZE, tag) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return false;
@@ -396,22 +338,21 @@ bool send_secure_message(int socket_fd, const vector<uint8_t>& cleartext, const 
 
     EVP_CIPHER_CTX_free(ctx);
     
-    seq_num++; // Increment to prevent replay attacks
+    seq_num++; //Increment to prevent replay attacks
 
-    // 8. Send the fully assembled contiguous buffer
+    //Send the fully assembled contiguous buffer
     return send_message(socket_fd, payload_buffer);
 }
 
 bool recv_secure_message(int socket_fd, vector<uint8_t>& cleartext_out, const vector<uint8_t>& aes_key, uint64_t& seq_num) {
     vector<uint8_t> recv_buffer;
     
-    // 1. Receive the complete payload
+    //Receive the complete payload
     if (!recv_message(socket_fd, recv_buffer)) {
         cerr << "[ERROR] Reception failed or socket closed." << endl;
         return false;
     }
 
-    // Usa size_t qui per allinearti a recv_buffer.size()
     const size_t IV_SIZE = 12;
     const size_t TAG_SIZE = 16;
     
@@ -420,19 +361,16 @@ bool recv_secure_message(int socket_fd, vector<uint8_t>& cleartext_out, const ve
         return false;
     }
 
-    // Manteniamo payload_len come int perché OpenSSL (EVP_DecryptUpdate) si aspetta un int come parametro di lunghezza.
-    // Il cast esplicito sopprime ogni warning del compilatore.
     int payload_len = static_cast<int>(recv_buffer.size() - IV_SIZE - TAG_SIZE);
     
-    // 2. Map pointers to their respective sections in the received buffer
+    //Map pointers to their respective sections in the received buffer
     unsigned char* iv = recv_buffer.data();
     unsigned char* ciphertext = recv_buffer.data() + IV_SIZE;
     unsigned char* tag = recv_buffer.data() + IV_SIZE + payload_len;
 
-    // Pre-allocate the output buffer
+    //Pre-allocate the output buffer
     cleartext_out.resize(payload_len);
 
-    // 3. OpenSSL Initialization for decryption
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (!ctx) return false;
 
@@ -445,33 +383,33 @@ bool recv_secure_message(int socket_fd, vector<uint8_t>& cleartext_out, const ve
         return false;
     }
 
-    // 4. Insert Sequence Number (AAD) for verification
+    //Insert Sequence Number (AAD) for verification
     if (EVP_DecryptUpdate(ctx, NULL, &len, reinterpret_cast<const unsigned char*>(&seq_num), sizeof(seq_num)) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return false;
     }
 
-    // 5. Decryption
+    //Decryption
     if (EVP_DecryptUpdate(ctx, cleartext_out.data(), &len, ciphertext, payload_len) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return false;
     }
     plaintext_len = len;
 
-    // 6. Set the received TAG to allow OpenSSL to validate it
+    //Set the received TAG to allow OpenSSL to validate it
     if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, TAG_SIZE, tag) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return false;
     }
 
-    // 7. Finalization. In GCM, this step performs TAG authentication!
+    //Finalization. In GCM, this step performs TAG authentication!
     int ret = EVP_DecryptFinal_ex(ctx, cleartext_out.data() + plaintext_len, &len);
     
     EVP_CIPHER_CTX_free(ctx);
 
     if (ret != 1) {
         cerr << "[CRITICAL ERROR] Decryption failed! TAG mismatch (Possible MitM, Replay, or Data Corruption)." << endl;
-        cleartext_out.clear(); // Memory cleanup
+        cleartext_out.clear(); //Memory cleanup
         return false;
     }
 
@@ -480,22 +418,24 @@ bool recv_secure_message(int socket_fd, vector<uint8_t>& cleartext_out, const ve
 }
 
 // ------------------------------------------------------------
-// logic functions
+// USER BALANCE REQ
 // ----------------------------------
 void getUserBalance(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num) {
     
     printBanner("Balance request submitted. Here is your balance:", BOLD_MAGENTA);
     cout << "Server request loading... \n";
 
-    // 1. Send command byte 'B' over the secure AES-GCM channel
+    //Send command byte 'B' over the secure AES-GCM channel
     vector<uint8_t> request_payload = {'B'}; 
 
+    //send_secure_message handles AES encryption and sequence number (seq_num) increment
+    //to protect the transmission against both eavesdropping and replay attacks.
     if (!send_secure_message(sock, request_payload, aes_key, seq_num)) {
         cerr << "[CLIENT ERROR] Error sending balance request!" << endl;
         return; 
     }
 
-    // 2. Receive encrypted payload from server
+    //Receive encrypted payload from server
     vector<uint8_t> response_payload;
 
     if (!recv_secure_message(sock, response_payload, aes_key, seq_num)) {
@@ -503,14 +443,17 @@ void getUserBalance(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num)
         return;
     }
 
-    // 3. Unpack & decrypt binary payload into C++ struct
+    //Unpack & decrypt binary payload into C++ struct
     BalanceResponse res;
+
+    //We pass the raw decrypted bytes to the unpacking function to safely rebuild our struct
+    //avoiding any padding or memory alignment issues.
     if (!unpack_balance_response(response_payload, res)) {
         cerr << "[CLIENT ERROR] Invalid balance response format!" << endl;
         return;
     }
 
-    // 4. Validate server status
+    //Validate server status
     if (res.status != Status::OK) {
         cerr << "[CLIENT ERROR] Server failed to retrieve balance." << endl;
         return;
@@ -518,23 +461,26 @@ void getUserBalance(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num)
 
     cout << "Here is the server Response!!" << endl;
     
-    // 5. Render populated data to screen
+    //Render populated data to screen
     balance(res.info); 
 }
 
 vector<uint8_t> pack_balance_response(const BalanceResponse& res) {
     vector<uint8_t> out;
-    out.reserve(13); // 1 + 4 + 4 + 4 bytes
+    
+    //Pre-allocate memory to avoid multiple reallocations during push_back/insert.
+    //Size is strictly 13 bytes: 1 (status) + 4 (consumed) + 4 (remaining) + 4 (total).
+    out.reserve(13); 
 
-    // 1. Stato della risposta (1 byte)
+    //Response status (1 byte)
     out.push_back(static_cast<uint8_t>(res.status));
 
-    // Convertiamo gli unsigned int in Network Byte Order (Big-Endian)
+    // Handle Endianness for 32-bit integers
     uint32_t consumed_net = htonl(static_cast<uint32_t>(res.info.consumed));
     uint32_t remaining_net = htonl(static_cast<uint32_t>(res.info.remaining));
     uint32_t total_net = htonl(static_cast<uint32_t>(res.info.total));
 
-    // 2. Inserimento dei campi a 4 byte nel buffer
+    //Insert the 4-byte fields into the buffer
     uint8_t buf[4];
     
     memcpy(buf, &consumed_net, 4);
@@ -548,220 +494,276 @@ vector<uint8_t> pack_balance_response(const BalanceResponse& res) {
 
     return out;
 }
+
 bool unpack_balance_response(const vector<uint8_t>& payload, BalanceResponse& out) {
-    // Controllo di sicurezza sulla dimensione esatta
+    // Strict security check on exact payload size.
     if (payload.size() != 13) return false;
 
-    // 1. Estrazione dello stato
+    //Extract status byte
     uint8_t status_byte = payload[0];
+    
+    //Basic bounds checking to ensure the status byte represents a valid ENUM value
     if (status_byte > static_cast<uint8_t>(Status::INTERNAL_ERROR)) return false;
     out.status = static_cast<Status>(status_byte);
 
-    // 2. Estrazione di consumed, remaining e total (da Big-Endian a Host Byte Order)
+    //Extract consumed, remaining, and total fields
     uint32_t consumed_net, remaining_net, total_net;
 
+    // Read bytes 1 to 4
     memcpy(&consumed_net, payload.data() + 1, 4);
     out.info.consumed = ntohl(consumed_net);
 
+    //Read bytes 5 to 8
     memcpy(&remaining_net, payload.data() + 5, 4);
     out.info.remaining = ntohl(remaining_net);
 
+    //Read bytes 9 to 12
     memcpy(&total_net, payload.data() + 9, 4);
     out.info.total = ntohl(total_net);
 
     return true;
 }
 
+//--------------------------------------------------
+// TIMESTAMPING 
+//--------------------------------------
 void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num) {
+    //Initialize the payload with the command byte 'T', also for the server
     vector<uint8_t> request_payload = {'T'}; 
 
     printBanner("Timestamp request submitted.", BOLD_CYAN);
     
+    //getting the file name to timestamp
     std::string filename;
     cout << "Enter the name of the file you want to timestamp: ";
     cin >> filename;
 
-    
+    //INPUT VALIDATION
     if(filename.empty()) {
         cerr << "[CLIENT ERROR] Filename cannot be empty." << endl;
         return;
     }
     
+    //Prevent Path Traversal attacks
     if(filename.find('/') != string::npos || filename.find('\\') != string::npos || filename.find("..") != string::npos) {
         cerr << "[CLIENT ERROR] please enter the filename not the path" << endl;
         return;
     }
+    
+    //Automatically append ".txt" extension if the user didn't provide one
     if (filename.find('.') == string::npos) {
         filename += ".txt";
     }
-    // define the folder where the timestamped files will be saved the input and output
+    
+    //Define  paths for input and output directories
     string inputFolder = "../timestamp_docs";
     string outputFolder = "../timestamped_docs";
+    string fullPath = inputFolder + "/" + filename; 
     
-
-    string fullPath = inputFolder + "/" + filename; // for the correct path
-    string baseName = std::filesystem::path(filename).stem().string();
-    string jsonFilePath = outputFolder + "/" + filename + ".json";
+    // Estrai il nome pulito senza estensione anche per la fase di lettura
+    string baseNameVerify = std::filesystem::path(filename).stem().string();
+    string jsonFilePath = outputFolder + "/" + baseNameVerify + ".json";
+    //HASH COMPUTATION
+    array<uint8_t, 32> hash = sha256_file(fullPath); //shaof the local file
     
-    
-    // compute the SHA-256 hash of the file
-    array<uint8_t, 32> hash = sha256_file(fullPath);
+    //Check if the hash is all zeros, which indicates the file reading or hashing failed
     if(hash[0] == 0 && hash[1] == 0 && hash[2] == 0 && hash[3] == 0) {
         cerr << "[CLIENT ERROR] Failed to compute SHA-256 hash of the file." << endl;
         return;
     }
 
-    // build request: command byte 'T' + 32-byte hash
+    //BUILD AND SEND REQUEST
+    // Create the request object and pack it into a byte array for network transmission
     TimestampRequest req;
     req.hash = hash;
     vector<uint8_t> ts_payload = pack_timestamp_request(req);
+    
+    //Append the packed hash to the initial 'T' command byte
     request_payload.insert(request_payload.end(), ts_payload.begin(), ts_payload.end());
+    
+    //Send the request securely with the secure send
     if (!send_secure_message(sock, request_payload, aes_key, seq_num)) {
         cerr << "[CLIENT ERROR] Error sending timestamp request!" << endl;
         return;
     }
 
+    //RECEIVE AND UNPACK RESPONSE ---
     vector<uint8_t> response_payload;
     if (!recv_secure_message(sock, response_payload, aes_key, seq_num)) {
         cerr << "[CLIENT ERROR] Error receiving timestamp response!" << endl;
         return;
     }
 
+    //Deserialize the raw bytes back into a structured TimestampResponse object
     TimestampResponse resp;
     if (!unpack_timestamp_response(response_payload, resp)) {
         cerr << "[CLIENT ERROR] Invalid timestamp response format!" << endl;
         return;
     }
 
+    //Check if the server processed the request successfully
     if (resp.status != Status::OK) {
         cerr << "[CLIENT ERROR] Server failed to provide timestamp." << endl;
         return;
     }
 
-    // verify the signature using the server's timestamp public key
+    //CRYPTOGRAPHIC VERIFICATION
+    // Load the server's public key to verify that the timestamp was actually generated by the server
     EVP_PKEY* ts_pubk = load_public_key("../keys/server_ts_pub.pem");
     if (!ts_pubk) {
         cerr << "[CLIENT ERROR] Failed to load timestamp public key." << endl;
         return;
     }
 
-    // Build the signed data: [32-byte hash] + [8-byte timestamp]
+    //Reconstruct the exact data that the server signed: [32-byte hash] + [8-byte timestamp]
     vector<uint8_t> signed_data(40);
-    memcpy(signed_data.data(), resp.hash.data(), 32);
+    memcpy(signed_data.data(), resp.hash.data(), 32); // Copy the hash
+    
+    //Convert timestamp to Network Byte Order (Big-Endian) before checking the signature.
     uint64_t ts_net = htobe64(resp.timestamp);
-    memcpy(signed_data.data() + 32, &ts_net, 8);
+    memcpy(signed_data.data() + 32, &ts_net, 8); //Append the timestamp
 
+    //Verify the digital signature using the constructed data and the server's public key
     bool valid_sig = verify_signature(signed_data, resp.signature, ts_pubk);
-    EVP_PKEY_free(ts_pubk);
+    EVP_PKEY_free(ts_pubk); // Free memory to prevent leaks
 
+    //PROCESS AND SAVE RESULTS
     if (valid_sig) {
-        printBanner("[CLIENT] Timestamp process successful!", BOLD_GREEN);
+        // Convert the 32-byte hash into a readable hexadecimal string
+        string Hash_Value;
+        for(uint8_t byte : resp.hash) {
+            char buf[3];
+            snprintf(buf, sizeof(buf), "%02x", byte);
+            Hash_Value += buf;
+        }
 
-    string Hash_Value;
-    for(uint8_t byte : resp.hash) {
-        char buf[3]; // buffer to hold the hex representation of a byte
-        snprintf(buf, sizeof(buf), "%02x", byte); // convert byte to hex and store in buffer
-        Hash_Value += buf;
-    }
+        //Convert the digital signature into a readable hexadecimal string for JSON storage and display
+        string Signature;
+        for(uint8_t byte : resp.signature) {
+            char buf[3];
+            snprintf(buf, sizeof(buf), "%02x", byte);
+            Signature += buf;
+        }
+        
+        timestampCompleted(filename, Hash_Value, resp.timestamp, Signature);
 
-    
-    // converts the signature to hex for JSON storage
-    string Signature;
-    for(uint8_t byte : resp.signature) {
-        char buf[3]; // buffer to hold the hex representation of a byte
-        snprintf(buf, sizeof(buf), "%02x", byte);
-        Signature += buf;
-    }
-    
-    // builds the JSON object to store the timestamp information
-    json jsonTimestamp;
-    jsonTimestamp["Hash Value"] = Hash_Value;
-    jsonTimestamp["Timing"] = to_string(resp.timestamp);
-    jsonTimestamp["Signature"] = Signature;
-    
-    // checks if the folder exists, if it doesn't creates it
-    if(mkdir(outputFolder.c_str(), 0755) != 0 && errno != EEXIST) // 0755 is the permission for the folder
-    {
-        cerr << "[CLIENT ERROR] Failed to create output folder." << endl;
-        return;
-    }
+        //Build a JSON object to store the timestamp metadata persistently and save them
+        json jsonTimestamp;
+        jsonTimestamp["Hash Value"] = Hash_Value;
+        jsonTimestamp["Timing"] = to_string(resp.timestamp);
+        jsonTimestamp["Signature"] = Signature;
+        
+        if(mkdir(outputFolder.c_str(), 0755) != 0 && errno != EEXIST) {
+            cerr << "[CLIENT ERROR] Failed to create output folder." << endl;
+            return;
+        }
 
-    // writes the JSON object to a file
-    ofstream jsonFile(jsonFilePath);
-    if (!jsonFile.is_open()) {
-        cerr << "[CLIENT ERROR] Failed to open JSON file for writing. "<< endl;
-        return;
-    }
-    jsonFile << jsonTimestamp.dump(4); // pretty print with 4 spaces indentation
-    jsonFile.close();
-    cout << "[CLIENT] Timestamp information saved. "<< endl;
-    }
-    
-    else {
+        //Open the JSON file and write the data
+        ofstream jsonFile(jsonFilePath);
+        if (!jsonFile.is_open()) {
+            cerr << "[CLIENT ERROR] Failed to open JSON file for writing."<< endl;
+            return;
+        }
+        
+        //Dump the JSON with an indentation of 4 spaces for better readability
+        jsonFile << jsonTimestamp.dump(4);
+        jsonFile.close();
+        
+        cout << "[CLIENT] JSON information successfully saved in: " << jsonFilePath << endl;
+    } else {
         printBanner("[CLIENT ERROR] Timestamp VERIFICATION FAILED!", BOLD_RED);
     }
 }
 
-
+//Converts a TimestampRequest struct into a raw byte array for network transmission
 vector<uint8_t> pack_timestamp_request(const TimestampRequest& req) {
     vector<uint8_t> out(32);
+    // Copy the 32 bytes of the hash into the output vector
     memcpy(out.data(), req.hash.data(), 32); 
     return out;
 }
 
+//Converts a raw byte array received from the network back into a TimestampRequest struct
 bool unpack_timestamp_request(const vector<uint8_t>& payload, TimestampRequest& out) {
+    // The request payload must be exactly 32 bytes (the SHA-256 hash size)
     if (payload.size() != 32) return false;
     memcpy(out.hash.data(), payload.data(), 32);
     return true;
 }
 
+//Converts a TimestampResponse struct into a raw byte array, handling Endianness
 vector<uint8_t> pack_timestamp_response(const TimestampResponse& res) {
     vector<uint8_t> out;
 
-    // status (1 byte)
+    //Status (1 byte)
     out.push_back(static_cast<uint8_t>(res.status));
-    // hash (32 bytes)
+    
+    //Hash (32 bytes)
     out.insert(out.end(), res.hash.begin(), res.hash.end());
-    // timestamp (8 bytes, network byte order)
+    
+    //Timestamp (8 bytes). 
+    // htobe64 converts the 64-bit integer from Host byte order to Network byte order (Big-Endian)
     uint64_t ts_net = htobe64(res.timestamp);
     uint8_t ts_bytes[8];
     memcpy(ts_bytes, &ts_net, 8);
     out.insert(out.end(), ts_bytes, ts_bytes + 8);
-    // signature length (2 bytes) + signature
-    uint16_t sig_len = htons(static_cast<uint16_t>(res.signature.size())); // convert to network byte order
+    
+    //Signature Length (2 bytes). 
+    // htons converts the 16-bit short integer to Network byte order
+    uint16_t sig_len = htons(static_cast<uint16_t>(res.signature.size())); 
     uint8_t sig_len_bytes[2]; 
     memcpy(sig_len_bytes, &sig_len, 2);
     out.insert(out.end(), sig_len_bytes, sig_len_bytes + 2); 
+    
+    //Signature data (Variable length)
     out.insert(out.end(), res.signature.begin(), res.signature.end());
+    
     return out;
 }
 
+//Converts a raw byte array received from the network back into a TimestampResponse struct
 bool unpack_timestamp_response(const vector<uint8_t>& payload, TimestampResponse& out) {
-    if (payload.size() < 1 + 32 + 8 + 2) return false; // minimum size: status + hash + timestamp + sig_len
+    // Check if the payload has at least the minimum required size: 
+    // 1 (status) + 32 (hash) + 8 (timestamp) + 2 (sig_len) = 43 bytes
+    if (payload.size() < 1 + 32 + 8 + 2) return false; 
 
     size_t offset = 0;
-    // status
+    
+    //Read Status
     uint8_t status_byte = payload[offset++];
-    if (status_byte > static_cast<uint8_t>(Status::INTERNAL_ERROR)) return false;
+    if (status_byte > static_cast<uint8_t>(Status::INTERNAL_ERROR)) return false; // Basic bounds checking
     out.status = static_cast<Status>(status_byte);
-    // hash
+    
+    //Read Hash
     memcpy(out.hash.data(), payload.data() + offset, 32);
     offset += 32;
-    // timestamp
+    
+    //Read Timestamp
     uint64_t ts_net;
     memcpy(&ts_net, payload.data() + offset, 8);
+    // be64toh converts from Network byte order (Big-Endian) back to Host byte order
     out.timestamp = be64toh(ts_net);
     offset += 8;
-    // signature length
+    
+    //Read Signature Length
     uint16_t sig_len_net;
     memcpy(&sig_len_net, payload.data() + offset, 2);
+    // ntohs converts from Network byte order back to Host byte order
     uint16_t sig_len = ntohs(sig_len_net);
     offset += 2;
+    
+    // Validate that the remaining payload size exactly matches the claimed signature length
     if (payload.size() != offset + sig_len) return false;
+    
+    //Read Signature
     out.signature.assign(payload.begin() + offset, payload.begin() + offset + sig_len);
 
     return true;
 }
+
+//------------------------------------------------------
+// Verification function - local within the service
+//------------------------------------------------------
 
 void userVerification(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num) {
 
@@ -789,8 +791,10 @@ void userVerification(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_nu
 
     string inputFolder = "../timestamp_docs";
     string outputFolder = "../timestamped_docs";
-    string fullPath = inputFolder + "/" + fileToVerify; //for the correct path
-    string jsonFilePath = outputFolder + "/" + fileToVerify + ".json";
+    string fullPath = inputFolder + "/" + fileToVerify; 
+    
+    string baseNameVerify = std::filesystem::path(fileToVerify).stem().string();
+    string jsonFilePath = outputFolder + "/" + baseNameVerify + ".json";
     
     cout << "Calculating the hash of the file..." << endl;
 
@@ -799,9 +803,6 @@ void userVerification(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_nu
         cerr << "Error in finding or reading the file" << endl;
         return;
     }
-
-
-    //vado a cercare il certificato salavto prima
     ifstream fileStream(jsonFilePath);
     if(!fileStream.is_open()) {
         cerr << "the document hasn't been timestamped yet, sorry." << endl;
@@ -827,7 +828,7 @@ void userVerification(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_nu
         signature = jsonTimestamp.at("Signature").get<string>();
 
     } catch (const exception& e){
-        cerr << "The certificate hash wrong or missing fields!" << endl;
+        cerr << "The document hash wrong or missing fields!" << endl;
         return;
     }
 
@@ -846,10 +847,14 @@ char hexBuffer[65];
     
 
     vector<uint8_t> signatureBinary;
-    for (size_t i = 0; i < signature.length(); i += 2) {
-        signatureBinary.push_back(static_cast<uint8_t>(stoul(signature.substr(i, 2), nullptr, 16)));
+    try {
+        for (size_t i = 0; i < signature.length(); i += 2) {
+            signatureBinary.push_back(static_cast<uint8_t>(stoul(signature.substr(i, 2), nullptr, 16)));
+        }
+    } catch (const exception& e) {
+        cerr << "[CLIENT ERROR] Invalid signature format in JSON document." << endl;
+        return;
     }
-
     vector<uint8_t> dataToVerify(40);
     memcpy(dataToVerify.data(), currentHashFile.data(), 32); 
     
@@ -872,6 +877,7 @@ char hexBuffer[65];
         printBanner("CRYPTOGRAPHIC ERROR: The server signature does not match! The JSON was forged.", BOLD_RED);
     }
 }
+
 
 //for printing the correct timetsamp format 
 void printTimestampOf(const unsigned char* doc) {

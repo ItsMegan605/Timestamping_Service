@@ -20,17 +20,13 @@ using namespace std;
 // SHA-256 HASHING FUNCTIONS and NONCE utilities
 // ==============================================================================
 
-/**
- * sha256_data
- * Computes the SHA-256 hash of a raw byte vector safely and compactly.
- */
+//sha of the data
 array<uint8_t, 32> sha256_data(const vector<uint8_t>& data) {
     array<uint8_t, 32> hash = {}; 
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     
-    if (!ctx) return hash; // Controllo di sicurezza essenziale
+    if (!ctx) return hash; 
 
-    // Concateniamo le operazioni. Se una fallisce, salta le successive.
     if (EVP_DigestInit_ex(ctx, EVP_sha256(), NULL) == 1 &&
         EVP_DigestUpdate(ctx, data.data(), data.size()) == 1) {
         
@@ -42,10 +38,7 @@ array<uint8_t, 32> sha256_data(const vector<uint8_t>& data) {
     return hash;
 }
 
-/**
- * sha256_file
- * Computes the SHA-256 hash of a file's contents safely and compactly.
- */
+//sha file 
 array<uint8_t, 32> sha256_file(const string& filename) {
     array<uint8_t, 32> hash = {}; 
 
@@ -64,7 +57,6 @@ array<uint8_t, 32> sha256_file(const string& filename) {
         size_t bytes_read = 0;
         bool success = true;
 
-        // Manteniamo il ciclo di lettura a blocchi: è obbligatorio per i file!
         while ((bytes_read = fread(buffer.data(), 1, buffer_size, file)) > 0) {
             if (EVP_DigestUpdate(ctx, buffer.data(), bytes_read) != 1) {
                 success = false;
@@ -118,9 +110,7 @@ EVP_PKEY* load_public_key(const string& filepath) {
 // SIGNATURES
 // ==============================================================================
 
-/**
- * sign_data
- */
+//sign data
 vector<uint8_t> sign_data(const vector<uint8_t>& data, EVP_PKEY* priv_key) {
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     if (!ctx) {
@@ -152,9 +142,7 @@ vector<uint8_t> sign_data(const vector<uint8_t>& data, EVP_PKEY* priv_key) {
     return signature;
 }
 
-/**
- * verify_signature
- */
+//verification fo the signature
 bool verify_signature(const vector<uint8_t>& data, const vector<uint8_t>& signature, EVP_PKEY* pub_key) {
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     bool result = false;
@@ -173,10 +161,7 @@ bool verify_signature(const vector<uint8_t>& data, const vector<uint8_t>& signat
 // ECDH & EPHEMERAL KEYS
 // ==============================================================================
 
-/**
- * generate_ephemeral_key
- * Generates an ephemeral Elliptic Curve key pair (P-256) for Perfect Forward Secrecy.
- */
+//generate ephimeral key
 EVP_PKEY* generate_ephemeral_key() {
     EVP_PKEY* dh_params = NULL;
     EVP_PKEY_CTX* ctx_params = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
@@ -209,10 +194,7 @@ EVP_PKEY* generate_ephemeral_key() {
     return ephemeral_key;
 }
 
-/**
- * serialize_pubkey
- * Converts an internal OpenSSL EVP_PKEY structure into a raw DER byte format for transmission.
- */
+//serialize pub_key
 vector<uint8_t> serialize_pubkey(EVP_PKEY* pkey) {
     unsigned char* buf = nullptr;
     int len = i2d_PUBKEY(pkey, &buf);
@@ -221,10 +203,7 @@ vector<uint8_t> serialize_pubkey(EVP_PKEY* pkey) {
     return result;
 }
 
-/**
- * deserialize_pubkey
- * Parses a raw DER byte format back into an OpenSSL EVP_PKEY structure.
- */
+// deserialize_pubkey
 EVP_PKEY* deserialize_pubkey(const vector<uint8_t>& pubkey_bytes) {
     const unsigned char* ptr = pubkey_bytes.data();
     return d2i_PUBKEY(NULL, &ptr, pubkey_bytes.size());
@@ -235,11 +214,7 @@ EVP_PKEY* deserialize_pubkey(const vector<uint8_t>& pubkey_bytes) {
 // ECDH DERIVATION
 // ==============================================================================
 
-/**
- * derive_shared_secret
- * Computes the mathematical shared secret by combining the local private ephemeral key 
- * with the peer's public ephemeral key.
- */
+//shared secret calculation
 bool derive_shared_secret(EVP_PKEY* priv_key, EVP_PKEY* peer_pub_key, vector<uint8_t>& out_secret) {
     EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(priv_key, nullptr);
     if (!ctx) return false;
@@ -266,23 +241,14 @@ bool derive_shared_secret(EVP_PKEY* priv_key, EVP_PKEY* peer_pub_key, vector<uin
     }
 
     EVP_PKEY_CTX_free(ctx);
-    
-    // TODO: (PFS) It is up to the caller to cleanse the 'out_secret' buffer using 
-    // OPENSSL_cleanse(out_secret.data(), out_secret.size()) immediately after 
-    // passing it to the HKDF module, ensuring the raw material is removed from RAM.
     return true;
 }
-
-
 
 // ==============================================================================
 // HKDF IMPLEMENTATION (HMAC-based Key Derivation Function)
 // ==============================================================================
 
-/**
- * hmac_sha256
- * Internal helper function. Computes the HMAC-SHA256 of the given data using the specified key.
- */
+//Computes the HMAC-SHA256 of the given data using the specified key.
 static array<uint8_t, 32> hmac_sha256(const vector<uint8_t>& key, const vector<uint8_t>& data) {
     array<uint8_t, 32> result;
     unsigned int result_len = 0;   
@@ -300,19 +266,13 @@ static array<uint8_t, 32> hmac_sha256(const vector<uint8_t>& key, const vector<u
     return result;
 }       
 
-/**
- * hkdf_extract
- * Phase 1 of HKDF. Extracts a fixed-length pseudorandom key (PRK) from the shared secret,
- * using the concatenated nonces as the salt.
- */
+
+//Extracts a fixed-length pseudorandom key (PRK) from the shared secret,
 static array<uint8_t, 32> hkdf_extract(const vector<uint8_t>& salt, const vector<uint8_t>& ikm) {
     return hmac_sha256(salt, ikm);
 }
 
-/**
- * hkdf_expand
- * Phase 2 of HKDF. Expands the PRK into the desired output length (AES Key + IV).
- */
+//Expands the PRK into the desired output length (AES Key + IV).
 static vector<uint8_t> hkdf_expand(const array<uint8_t, 32>& prk, const string& info, size_t out_len) {
     vector<uint8_t> output; 
     output.reserve(out_len);
@@ -356,16 +316,16 @@ bool hkdf_extract_expand(const vector<uint8_t>& shared_secret,
         return false;
     }
 
-    // 1. Prepare the salt using both nonces
+    //Prepare the salt using both nonces
     vector<uint8_t> salt;
     salt.reserve(NONCE_SIZE * 2);
     salt.insert(salt.end(), client_nonce.begin(), client_nonce.end());
     salt.insert(salt.end(), server_nonce.begin(), server_nonce.end());
 
-    // 2. Extract step: create the PRK
+    //Extract step: create the PRK
     array<uint8_t, 32> prk = hkdf_extract(salt, shared_secret);
 
-    // 3. Expand step: generate exactly 32 bytes for AES-256
+    //Expand step: generate exactly 32 bytes for AES-256
     const size_t AES_KEY_LEN = 32;
     const string info = "tss_session_key";
 
@@ -377,10 +337,10 @@ bool hkdf_extract_expand(const vector<uint8_t>& shared_secret,
         return false;
     }
 
-    // 4. Assign the generated key
+    //Assign the generated key
     out_enc_key.assign(expanded.begin(), expanded.end());
 
-    // 5. Perfect Forward Secrecy: wipe intermediate secrets from RAM
+    //Perfect Forward Secrecy: wipe intermediate secrets from RAM
     OPENSSL_cleanse(prk.data(), prk.size());
     OPENSSL_cleanse(expanded.data(), expanded.size());
 

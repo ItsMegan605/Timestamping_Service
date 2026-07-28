@@ -8,6 +8,8 @@
 #include <format>
 using namespace std;
 
+//code for the interface-like in the project
+
 void printBanner(const std::string& message, const std::string& color) {
     int padding = 4;
     int width = message.length() + padding;
@@ -20,6 +22,7 @@ void printBanner(const std::string& message, const std::string& color) {
     cout << RESET << std::endl;
 }
 
+//before login
 void serviceEntry(){
     std::cout << "\n" << BOLD_MAGENTA << "========================================" << RESET << "\n";
     std::cout << BOLD_MAGENTA << "            HELLO! WELCOME             " << RESET << "\n";
@@ -32,6 +35,7 @@ void serviceEntry(){
     std::cout << BOLD_GREEN << "Insert your choice: " << RESET;
 }
 
+//after login
 void homeMenu(){
     std::cout << "\n" << BOLD_MAGENTA << "========================================" << RESET << "\n";
     std::cout << BOLD_MAGENTA << "            HOME MENU             " << RESET << "\n";
@@ -45,6 +49,36 @@ void homeMenu(){
     std::cout << BOLD_GREEN << "Insert your choice: " << RESET;
 }
 
+void timestampCompleted(const std::string& filename, const std::string& hash_hex, uint64_t raw_time, const std::string& signature_hex) {
+    std::cout << "\n" << BOLD_MAGENTA << "========================================" << RESET << "\n";
+    std::cout << BOLD_MAGENTA << "           TIMESTAMP COMPLETED            " << RESET << "\n";
+    std::cout << BOLD_MAGENTA << "========================================" << RESET << "\n";
+    
+    std::cout << BOLD_CYAN << " File: " << RESET << filename << "\n";
+    std::cout << BOLD_CYAN << " Status: " << RESET << BOLD_GREEN << "Successfully stamped and verified" << RESET << "\n";
+    
+    try {
+        std::chrono::seconds duration_secs(raw_time);
+        std::chrono::system_clock::time_point tp(duration_secs);
+        auto local_time = std::chrono::zoned_time{std::chrono::current_zone(), tp};
+        
+        std::cout << BOLD_CYAN << " Timestamp: " << RESET << std::format("{:%Y-%m-%d %H:%M:%S}", local_time) << "\n";
+    } catch (...) {
+        std::cout << BOLD_CYAN << " Timestamp: " << RESET << raw_time << " (Raw)\n";
+    }
+
+    std::cout << BOLD_CYAN << " Hash (SHA-256): " << RESET << hash_hex << "\n";
+    
+    std::string sig_display = signature_hex;
+    if (signature_hex.length() > 32) {
+        sig_display = signature_hex.substr(0, 16) + " ... " + signature_hex.substr(signature_hex.length() - 16);
+    }
+    std::cout << BOLD_CYAN << " Signature: " << RESET << sig_display << "\n";
+    
+    std::cout << BOLD_MAGENTA << "========================================" << RESET << "\n";
+}
+
+//balance request
 void balance(const TimestampInfo& info){
     std::cout << "\n" << BOLD_MAGENTA << "========================================" << RESET << "\n";
     std::cout << BOLD_MAGENTA << "           YOUR BALANCE             " << RESET << "\n";
@@ -55,6 +89,9 @@ void balance(const TimestampInfo& info){
     std::cout << BOLD_MAGENTA << "----------------------------------------" << RESET << "\n";
 }
 
+
+
+//verification request
 void verificationCompleted(const string& timestamp_str){ //add the filename
     std::cout << "\n" << BOLD_MAGENTA << "========================================" << RESET << "\n";
     std::cout << BOLD_MAGENTA << "           VERIFICATION COMPLETED             " << RESET << "\n";
