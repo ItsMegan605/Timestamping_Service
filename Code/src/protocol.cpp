@@ -117,23 +117,12 @@ bool unpack_client_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_ep
 
 
 //Serializes the Server Hello parameters.
-// Current Format: [2 bytes key len] + [Epub_S] + [Nonce_S] + [2 bytes sig len] + [Signature]
-
+// Current Format: [Epub_S] + [Nonce_S] + [Signature]
 vector<uint8_t> pack_server_hello(const vector<uint8_t>& epub_s, const vector<uint8_t>& ns, const vector<uint8_t>& signature) {
     vector<uint8_t> buffer;
     
-    uint16_t sig_len = htons(static_cast<uint16_t>(signature.size()));
-    uint8_t len_bytes[2];
-    
-    // Pack Epub_S (senza lunghezza)
     buffer.insert(buffer.end(), epub_s.begin(), epub_s.end());
-    
-    // Pack Server Nonce (Ns)
     buffer.insert(buffer.end(), ns.begin(), ns.end());
-    
-    // Pack Signature Length + Signature
-    memcpy(len_bytes, &sig_len, 2);
-    buffer.insert(buffer.end(), len_bytes, len_bytes + 2);
     buffer.insert(buffer.end(), signature.begin(), signature.end());
     
     return buffer;
@@ -144,31 +133,19 @@ bool unpack_server_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_ep
     const size_t EPH_KEY_SIZE = 91;
     size_t offset = 0;
 
-    // Dimensione minima: Chiave(91) + Nonce(32) + sig_len(2) = 125 byte
-    if (payload.size() < EPH_KEY_SIZE + NONCE_SIZE + 2) return false; 
+    if (payload.size() < EPH_KEY_SIZE + NONCE_SIZE) return false; 
 
-    // Extract Epub_S
     out_epub_s.assign(payload.begin() + offset, payload.begin() + offset + EPH_KEY_SIZE);
     offset += EPH_KEY_SIZE;
 
-    // Extract Ns
     out_ns.assign(payload.begin() + offset, payload.begin() + offset + NONCE_SIZE);
     offset += NONCE_SIZE;
 
-    // Extract Signature Length
-    uint16_t sig_len;
-    memcpy(&sig_len, payload.data() + offset, 2);
-    sig_len = ntohs(sig_len);
-    offset += 2;
-
-    // Controllo sicurezza: il buffer rimanente corrisponde esattamente a sig_len?
-    if (payload.size() != offset + sig_len) return false;
-
-    // Extract Signature
-    out_signature.assign(payload.begin() + offset, payload.begin() + offset + sig_len);
+    size_t sig_len = payload.size() - offset;
+    out_signature.assign(payload.begin() + offset, payload.end());
+    
     return true;
 }
-
 
 // Serializes the authentication credentials.
 // Format: [2 bytes username len] + [username] + [2 bytes password len] + [password]
@@ -688,14 +665,6 @@ vector<uint8_t> pack_timestamp_response(const TimestampResponse& res) {
     memcpy(ts_bytes, &ts_net, 8);
     out.insert(out.end(), ts_bytes, ts_bytes + 8);
     
-    //Signature Length (2 bytes). 
-    // htons converts the 16-bit short integer to Network byte order
-    uint16_t sig_len = htons(static_cast<uint16_t>(res.signature.size())); 
-    uint8_t sig_len_bytes[2]; 
-    memcpy(sig_len_bytes, &sig_len, 2);
-    out.insert(out.end(), sig_len_bytes, sig_len_bytes + 2); 
-    
-    //Signature data (Variable length)
     out.insert(out.end(), res.signature.begin(), res.signature.end());
     
     return out;
@@ -704,8 +673,8 @@ vector<uint8_t> pack_timestamp_response(const TimestampResponse& res) {
 //Converts a raw byte array received from the network back into a TimestampResponse struct
 bool unpack_timestamp_response(const vector<uint8_t>& payload, TimestampResponse& out) {
     // Check if the payload has at least the minimum required size: 
-    // 1 (status) + 32 (hash) + 8 (timestamp) + 2 (sig_len) = 43 bytes
-    if (payload.size() < 1 + 32 + 8 + 2) return false; 
+    // 1 (status) + 32 (hash) + 8 (timestamp)  = 41 bytes
+    if (payload.size() < 1 + 32 + 8) return false; 
 
     size_t offset = 0;
     
@@ -721,22 +690,10 @@ bool unpack_timestamp_response(const vector<uint8_t>& payload, TimestampResponse
     //Read Timestamp
     uint64_t ts_net;
     memcpy(&ts_net, payload.data() + offset, 8);
-    // be64toh converts from Network byte order (Big-Endian) back to Host byte order
     out.timestamp = be64toh(ts_net);
     offset += 8;
     
-    //Read Signature Length
-    uint16_t sig_len_net;
-    memcpy(&sig_len_net, payload.data() + offset, 2);
-    // ntohs converts from Network byte order back to Host byte order
-    uint16_t sig_len = ntohs(sig_len_net);
-    offset += 2;
-    
-    // Validate that the remaining payload size exactly matches the claimed signature length
-    if (payload.size() != offset + sig_len) return false;
-    
-    //Read Signature
-    out.signature.assign(payload.begin() + offset, payload.begin() + offset + sig_len);
+    out.signature.assign(payload.begin() + offset, payload.end());
 
     return true;
 }
