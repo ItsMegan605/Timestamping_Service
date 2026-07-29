@@ -93,12 +93,9 @@ bool recv_message(int socket_fd, vector<uint8_t>& out_payload) {
 //Format: [2 bytes key len] + [Epub_C] + [Nonce_C]
 vector<uint8_t> pack_client_hello(const vector<uint8_t>& epub_c, const vector<uint8_t>& nc) {
     vector<uint8_t> buffer;
-    uint16_t key_len = htons(static_cast<uint16_t>(epub_c.size()));
     
-    uint8_t len_bytes[2];
-    memcpy(len_bytes, &key_len, 2);
-    
-    buffer.insert(buffer.end(), len_bytes, len_bytes + 2);
+    //allocation of exact memory
+    buffer.reserve(epub_c.size() + nc.size());
     buffer.insert(buffer.end(), epub_c.begin(), epub_c.end());
     buffer.insert(buffer.end(), nc.begin(), nc.end());
     
@@ -107,17 +104,13 @@ vector<uint8_t> pack_client_hello(const vector<uint8_t>& epub_c, const vector<ui
 
 //Deserializes the Client Hello parameters, verifying strict boundaries.
 bool unpack_client_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_epub_c, vector<uint8_t>& out_nc) {
-    if (payload.size() < 2) return false;
+    const size_t EPH_KEY_SIZE = 91; //perfect dimention
     
-    uint16_t key_len_net;
-    memcpy(&key_len_net, payload.data(), 2);
-    uint16_t key_len = ntohs(key_len_net);
-
-    // Validate overall length
-if (payload.size() != static_cast<size_t>(2 + key_len + NONCE_SIZE)) return false;
-
-    out_epub_c.assign(payload.begin() + 2, payload.begin() + 2 + key_len);
-    out_nc.assign(payload.begin() + 2 + key_len, payload.end());
+    if (payload.size() != EPH_KEY_SIZE + NONCE_SIZE) return false;
+    
+    
+    out_epub_c.assign(payload.begin(), payload.begin() + EPH_KEY_SIZE);
+    out_nc.assign(payload.begin() + EPH_KEY_SIZE, payload.end());
     
     return true;
 }
@@ -127,22 +120,18 @@ if (payload.size() != static_cast<size_t>(2 + key_len + NONCE_SIZE)) return fals
 // Current Format: [2 bytes key len] + [Epub_S] + [Nonce_S] + [2 bytes sig len] + [Signature]
 
 vector<uint8_t> pack_server_hello(const vector<uint8_t>& epub_s, const vector<uint8_t>& ns, const vector<uint8_t>& signature) {
-    
     vector<uint8_t> buffer;
-    uint16_t key_len = htons(static_cast<uint16_t>(epub_s.size()));
+    
     uint16_t sig_len = htons(static_cast<uint16_t>(signature.size()));
-
     uint8_t len_bytes[2];
     
-    // Pack Epub_S
-    memcpy(len_bytes, &key_len, 2);
-    buffer.insert(buffer.end(), len_bytes, len_bytes + 2);
+    // Pack Epub_S (senza lunghezza)
     buffer.insert(buffer.end(), epub_s.begin(), epub_s.end());
     
     // Pack Server Nonce (Ns)
     buffer.insert(buffer.end(), ns.begin(), ns.end());
     
-    // Pack Signature
+    // Pack Signature Length + Signature
     memcpy(len_bytes, &sig_len, 2);
     buffer.insert(buffer.end(), len_bytes, len_bytes + 2);
     buffer.insert(buffer.end(), signature.begin(), signature.end());
@@ -151,35 +140,31 @@ vector<uint8_t> pack_server_hello(const vector<uint8_t>& epub_s, const vector<ui
 }
 
 //Deserializes the Server Hello parameters sequentially using an offset tracker.
-
 bool unpack_server_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_epub_s, vector<uint8_t>& out_ns, vector<uint8_t>& out_signature) {
-    
-    if (payload.size() < 2) return false;
+    const size_t EPH_KEY_SIZE = 91;
     size_t offset = 0;
 
+    // Dimensione minima: Chiave(91) + Nonce(32) + sig_len(2) = 125 byte
+    if (payload.size() < EPH_KEY_SIZE + NONCE_SIZE + 2) return false; 
+
     // Extract Epub_S
-    uint16_t key_len;
-    memcpy(&key_len, payload.data() + offset, 2);
-    key_len = ntohs(key_len);
-    offset += 2;
-
-    if (payload.size() < offset + key_len + NONCE_SIZE + 2) return false; 
-
-    out_epub_s.assign(payload.begin() + offset, payload.begin() + offset + key_len);
-    offset += key_len;
+    out_epub_s.assign(payload.begin() + offset, payload.begin() + offset + EPH_KEY_SIZE);
+    offset += EPH_KEY_SIZE;
 
     // Extract Ns
     out_ns.assign(payload.begin() + offset, payload.begin() + offset + NONCE_SIZE);
     offset += NONCE_SIZE;
 
-    // Extract Signature
+    // Extract Signature Length
     uint16_t sig_len;
     memcpy(&sig_len, payload.data() + offset, 2);
     sig_len = ntohs(sig_len);
     offset += 2;
 
+    // Controllo sicurezza: il buffer rimanente corrisponde esattamente a sig_len?
     if (payload.size() != offset + sig_len) return false;
 
+    // Extract Signature
     out_signature.assign(payload.begin() + offset, payload.begin() + offset + sig_len);
     return true;
 }
@@ -272,10 +257,8 @@ bool unpack_auth_response(const vector<uint8_t>& payload, AuthResponse& out) {
 using namespace std;
 
 
-bool send_secure_message(int socket_fd, const vector<uint8_t>& cleartext, const vector<uint8_t>& aes_key, uint64_t& seq_num) {
+bool send_secure_message(int socket_fd, const vector<uint8_t>& cleartext, const vector<uint8_t>& aes_key, uint64_t& send_seq_num) {
     
-    const size_t IV_SIZE = 12; 
-    const size_t TAG_SIZE = 16; 
     //calculate max pt dimention to not overflow the dimention
     const size_t MAX_PLAINTEXT_SIZE = MAX_MESSAGE_SIZE - IV_SIZE - TAG_SIZE;
 
@@ -312,7 +295,7 @@ bool send_secure_message(int socket_fd, const vector<uint8_t>& cleartext, const 
     }
 
     //Insert Sequence Number as AAD (Additional Authenticated Data)
-    if (EVP_EncryptUpdate(ctx, NULL, &len, reinterpret_cast<const unsigned char*>(&seq_num), sizeof(seq_num)) != 1) {
+    if (EVP_EncryptUpdate(ctx, NULL, &len, reinterpret_cast<const unsigned char*>(&send_seq_num), sizeof(send_seq_num)) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return false;
     }
@@ -338,13 +321,13 @@ bool send_secure_message(int socket_fd, const vector<uint8_t>& cleartext, const 
 
     EVP_CIPHER_CTX_free(ctx);
     
-    seq_num++; //Increment to prevent replay attacks
+    send_seq_num++; //Increment to prevent replay attacks
 
     //Send the fully assembled contiguous buffer
     return send_message(socket_fd, payload_buffer);
 }
 
-bool recv_secure_message(int socket_fd, vector<uint8_t>& cleartext_out, const vector<uint8_t>& aes_key, uint64_t& seq_num) {
+bool recv_secure_message(int socket_fd, vector<uint8_t>& cleartext_out, const vector<uint8_t>& aes_key, uint64_t& recv_seq_num) {
     vector<uint8_t> recv_buffer;
     
     //Receive the complete payload
@@ -352,9 +335,6 @@ bool recv_secure_message(int socket_fd, vector<uint8_t>& cleartext_out, const ve
         cerr << "[ERROR] Reception failed or socket closed." << endl;
         return false;
     }
-
-    const size_t IV_SIZE = 12;
-    const size_t TAG_SIZE = 16;
     
     if (recv_buffer.size() < IV_SIZE + TAG_SIZE) {
         cerr << "[ERROR] Received payload is too short." << endl;
@@ -384,7 +364,7 @@ bool recv_secure_message(int socket_fd, vector<uint8_t>& cleartext_out, const ve
     }
 
     //Insert Sequence Number (AAD) for verification
-    if (EVP_DecryptUpdate(ctx, NULL, &len, reinterpret_cast<const unsigned char*>(&seq_num), sizeof(seq_num)) != 1) {
+    if (EVP_DecryptUpdate(ctx, NULL, &len, reinterpret_cast<const unsigned char*>(&recv_seq_num), sizeof(recv_seq_num)) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return false;
     }
@@ -413,14 +393,14 @@ bool recv_secure_message(int socket_fd, vector<uint8_t>& cleartext_out, const ve
         return false;
     }
 
-    seq_num++;
+    recv_seq_num++;
     return true;
 }
 
 // ------------------------------------------------------------
 // USER BALANCE REQ
 // ----------------------------------
-void getUserBalance(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num) {
+void getUserBalance(int sock, const vector<uint8_t>& aes_key, uint64_t& send_seq_num, uint64_t& recv_seq_num) {
     
     printBanner("Balance request submitted. Here is your balance:", BOLD_MAGENTA);
     cout << "Server request loading... \n";
@@ -430,7 +410,7 @@ void getUserBalance(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num)
 
     //send_secure_message handles AES encryption and sequence number (seq_num) increment
     //to protect the transmission against both eavesdropping and replay attacks.
-    if (!send_secure_message(sock, request_payload, aes_key, seq_num)) {
+    if (!send_secure_message(sock, request_payload, aes_key, send_seq_num)) {
         cerr << "[CLIENT ERROR] Error sending balance request!" << endl;
         return; 
     }
@@ -438,7 +418,7 @@ void getUserBalance(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num)
     //Receive encrypted payload from server
     vector<uint8_t> response_payload;
 
-    if (!recv_secure_message(sock, response_payload, aes_key, seq_num)) {
+    if (!recv_secure_message(sock, response_payload, aes_key, recv_seq_num)) {
         cerr << "[CLIENT ERROR] Error receiving response from server!" << endl;
         return;
     }
@@ -527,7 +507,7 @@ bool unpack_balance_response(const vector<uint8_t>& payload, BalanceResponse& ou
 //--------------------------------------------------
 // TIMESTAMPING 
 //--------------------------------------
-void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num) {
+void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, uint64_t& send_seq_num, uint64_t& recv_seq_num) {
     //Initialize the payload with the command byte 'T', also for the server
     vector<uint8_t> request_payload = {'T'}; 
 
@@ -582,14 +562,14 @@ void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_nu
     request_payload.insert(request_payload.end(), ts_payload.begin(), ts_payload.end());
     
     //Send the request securely with the secure send
-    if (!send_secure_message(sock, request_payload, aes_key, seq_num)) {
+    if (!send_secure_message(sock, request_payload, aes_key, send_seq_num)) {
         cerr << "[CLIENT ERROR] Error sending timestamp request!" << endl;
         return;
     }
 
     //RECEIVE AND UNPACK RESPONSE ---
     vector<uint8_t> response_payload;
-    if (!recv_secure_message(sock, response_payload, aes_key, seq_num)) {
+    if (!recv_secure_message(sock, response_payload, aes_key, recv_seq_num)) {
         cerr << "[CLIENT ERROR] Error receiving timestamp response!" << endl;
         return;
     }
@@ -765,7 +745,7 @@ bool unpack_timestamp_response(const vector<uint8_t>& payload, TimestampResponse
 // Verification function - local within the service
 //------------------------------------------------------
 
-void userVerification(int sock, const vector<uint8_t>& aes_key, uint64_t& seq_num) {
+void userVerification(int sock, const vector<uint8_t>& aes_key) {
 
     printBanner("Let's verify your timestamp.", BOLD_GREEN);
 

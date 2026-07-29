@@ -1,14 +1,6 @@
 /**
  * database.h - Manages user accounts with JSON persistence.
- * 
- * TODO: Design a UserDatabase class that:
- *   - Loads users from "data/users.json" using nlohmann/json.
- *   - Authenticates username/password (salted SHA-256).
- *   - Consumes a timestamp (increments consumed, decrements remaining).
- *   - Returns balance (consumed, remaining).
- *   - Saves atomically (write to .tmp, then rename over the original).
- *   - Is thread-safe (mutex for concurrent access).
- */
+  */
 
 #ifndef DATABASE_H
 #define DATABASE_H

@@ -31,7 +31,7 @@ EVP_PKEY* load_public_key(const string& filepath);
 // --- Key Derivation (ECDH & HKDF) ---
 bool derive_shared_secret(EVP_PKEY* priv_key, EVP_PKEY* peer_pub_key, vector<uint8_t>& out_secret);
 
-// Derives AES key (32 bytes) and IV (12 bytes) using HKDF-SHA256
+// Derives AES key (32 bytes) using HKDF-SHA256
 bool hkdf_extract_expand(const vector<uint8_t>& shared_secret,
                         const vector<uint8_t>& client_nonce,
                         const vector<uint8_t>& server_nonce,
@@ -39,4 +39,4 @@ bool hkdf_extract_expand(const vector<uint8_t>& shared_secret,
 
 
 
-#endif // CRYPTO_H
+#endif 

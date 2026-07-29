@@ -116,12 +116,13 @@ void handle_client(int client_socket) {
     OPENSSL_cleanse(shared_secret.data(), shared_secret.size());
     printBanner("[SERVER] Handshake completed! Secure channel active.", BOLD_GREEN);
     
-    uint64_t seq_num = 0;
+    uint64_t send_seq_num = 0;
+    uint64_t recv_seq_num = 0;
     
 //----------------------- authentication phase -----------------------
     vector<uint8_t> authentication;
     // 1. Ricezione sicura delle credenziali
-    if(!recv_secure_message(client_socket, authentication, aes_key, seq_num)) {
+    if(!recv_secure_message(client_socket, authentication, aes_key, recv_seq_num)) {
         cerr << "[SERVER ERROR] Error securely receiving authentication request" << endl;
         close(client_socket);
         return;
@@ -148,7 +149,7 @@ void handle_client(int client_socket) {
     vector<uint8_t> authResponsePayload = pack_auth_response(authResponse);
     
     // 2. Invio sicuro della risposta 
-    if(!send_secure_message(client_socket, authResponsePayload, aes_key, seq_num)) {
+    if(!send_secure_message(client_socket, authResponsePayload, aes_key, send_seq_num)) {
         cerr << "SERVER ERROR securely answering the request!!" << endl;
         close(client_socket);
         return;
@@ -164,7 +165,7 @@ void handle_client(int client_socket) {
     while (true) {
         vector<uint8_t> encrypted_cmd;
         
-        if (!recv_secure_message(client_socket, encrypted_cmd, aes_key, seq_num)) {
+        if (!recv_secure_message(client_socket, encrypted_cmd, aes_key, recv_seq_num)) {
             cout << "[SERVER] Client disconnected or secure channel error." << endl;
             break;
         }
@@ -185,7 +186,7 @@ void handle_client(int client_socket) {
 
             vector<uint8_t> balance_payload = pack_balance_response(res);
 
-            if (!send_secure_message(client_socket, balance_payload, aes_key, seq_num)) {
+            if (!send_secure_message(client_socket, balance_payload, aes_key, send_seq_num)) {
                 cerr << "[SERVER ERROR] Impossible to send balance response" << endl;
                 break;
             }
@@ -233,7 +234,7 @@ void handle_client(int client_socket) {
             }
 
             vector<uint8_t> ts_response_payload = pack_timestamp_response(ts_res);
-            if (!send_secure_message(client_socket, ts_response_payload, aes_key, seq_num)) {
+            if (!send_secure_message(client_socket, ts_response_payload, aes_key, send_seq_num)) {
                 cerr << "[SERVER ERROR] Impossible to send timestamp response" << endl;
                 break;
             }

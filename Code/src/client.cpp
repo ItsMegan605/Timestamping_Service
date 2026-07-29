@@ -14,7 +14,8 @@ int main() {
 
 int sock = -1; 
 vector<uint8_t> aes_key;
-uint64_t seq_num = 0;  
+uint64_t send_seq_num = 0;  
+uint64_t recv_seq_num = 0;
 
 // -------------------------------------------------------------------------
 // user choices 
@@ -182,7 +183,7 @@ EVP_PKEY_free(server_conn_pub);
     vector<uint8_t> auth_payload = pack_auth_request(auth_req);
 
 
-    if (!send_secure_message(sock, auth_payload, aes_key, seq_num)) {
+    if (!send_secure_message(sock, auth_payload, aes_key, send_seq_num)) {
         cerr << "Error securely sending authentication request" << endl;
         std::fill(username.begin(), username.end(), '\0');
         std::fill(password.begin(), password.end(), '\0');
@@ -191,7 +192,7 @@ EVP_PKEY_free(server_conn_pub);
     }
 
 vector<uint8_t> auth_response_payload;
-    if (!recv_secure_message(sock, auth_response_payload, aes_key, seq_num)) {
+    if (!recv_secure_message(sock, auth_response_payload, aes_key, recv_seq_num)) {
         cerr << "Error securely receiving authentication response (possible MitM or Replay Attack)" << endl;
         std::fill(username.begin(), username.end(), '\0');
         std::fill(password.begin(), password.end(), '\0');
@@ -223,12 +224,12 @@ vector<uint8_t> auth_response_payload;
     break;
 
     } else if (choice == "verify") {
-        userVerification(sock, aes_key, seq_num);
+        userVerification(sock, aes_key);
 
     }else if (choice == "exit") {
     printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);
     vector<uint8_t> exit_payload = {'E'};
-    send_secure_message(sock, exit_payload, aes_key, seq_num);
+    send_secure_message(sock, exit_payload, aes_key, send_seq_num);
     close(sock);
     return EXIT_SUCCESS; 
     } else {
@@ -247,18 +248,18 @@ vector<uint8_t> auth_response_payload;
         cin >> choice;
         
         if (choice == "balance") {
-            getUserBalance(sock, aes_key, seq_num);
+            getUserBalance(sock, aes_key, send_seq_num, recv_seq_num);
         } 
         else if (choice == "timestamp"){
-            getUserTimestamp( sock, aes_key, seq_num);
+            getUserTimestamp( sock, aes_key, send_seq_num, recv_seq_num);
         }
         else if (choice == "verify") {
-            userVerification(sock, aes_key, seq_num);
+            userVerification(sock, aes_key);
         } 
         else if (choice == "exit") {
             printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);
             vector<uint8_t> exit_payload = {'E'};
-            send_secure_message(sock, exit_payload, aes_key, seq_num); 
+            send_secure_message(sock, exit_payload, aes_key, send_seq_num); 
             close(sock);
             return EXIT_SUCCESS; 
         }
