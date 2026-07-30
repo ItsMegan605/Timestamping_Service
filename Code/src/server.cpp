@@ -159,9 +159,14 @@ void handle_client(int client_socket) {
         close(client_socket);
         return;
     }
-// =========================================================================
+    // =========================================================================
     // APPLICATION LOOP (Balance, Timestamp, Exit)
     // =========================================================================
+
+    // per le print colorate:
+    /*
+    * cout << BOLD_YELLOW << " [SERVER] \n" < RESET << "white msg \n";
+    */
     while (true) {
         vector<uint8_t> encrypted_cmd;
         
@@ -175,7 +180,7 @@ void handle_client(int client_socket) {
         char command_type = static_cast<char>(encrypted_cmd[0]);
 
         if (command_type == 'B') { 
-            cout << "[SERVER] Received BALANCE request from user: " << authRequest.username << endl;
+            cout << BOLD_PURPLE << "[SERVER] Received BALANCE request from user: " << authRequest.username << RESET << endl;
             
             BalanceResponse res;
             if (db.get_balance(authRequest.username, res.info)) {
@@ -190,13 +195,13 @@ void handle_client(int client_socket) {
                 cerr << "[SERVER ERROR] Impossible to send balance response" << endl;
                 break;
             }
-            cout << "[SERVER] BALANCE response successfully sent to the client." << endl;
+            cout << BOLD_GREEN << "[SERVER] BALANCE response successfully sent to the client." << RESET << endl;
         }
         else if (command_type == 'T') { 
-            cout << "[SERVER] Received TIMESTAMP request from user: " << authRequest.username << endl;
+            cout << BOLD_YELLOW << "[SERVER] Received TIMESTAMP request from user: " << authRequest.username << RESET << endl;
             
             if (encrypted_cmd.size() < 1 + 32) {
-                cerr << "[SERVER ERROR] Invalid timestamp request length" << endl;
+                cerr << BOLD_RED << "[SERVER ERROR] Invalid timestamp request length" << RESET << endl;
                 break;
             }
             
@@ -212,7 +217,7 @@ void handle_client(int client_socket) {
                 ts_res.status = Status::QUOTA_EXHAUSTED;
                 ts_res.timestamp = 0;
                 ts_res.signature.clear();
-                cout << "[SERVER] Warning: user " << authRequest.username << " has exhausted their credits!" << endl;
+                cout << BOLD_ORANGE << "[SERVER] Warning: user " << authRequest.username << " has exhausted their credits!" << endl;
             } else {
                 ts_res.timestamp = static_cast<uint64_t>(time(nullptr)); 
             
@@ -255,7 +260,7 @@ void handle_client(int client_socket) {
 int main() {
 
     if (!db.load_from_file("../data/users.json")) {
-        cerr << "[SERVER ERROR] Impossibile caricare users.json" << endl;
+        cerr << "[SERVER ERROR] Impossible to upload the users" << endl;
         return EXIT_FAILURE;
     }
 
@@ -268,7 +273,7 @@ int main() {
     int server_fd = setup_server(DEFAULT_PORT);
     if (server_fd < 0) return EXIT_FAILURE;
     
-    cout << "[Server] Listening on port " << DEFAULT_PORT << "..." << endl;
+    cout << BOLD_TEAL << "[Server] Listening on port " << DEFAULT_PORT << RESET << endl;
     
     while (1) {
         struct sockaddr_in client_addr; 

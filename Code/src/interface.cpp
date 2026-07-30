@@ -49,7 +49,7 @@ void homeMenu(){
     std::cout << BOLD_GREEN << "Insert your choice: " << RESET;
 }
 
-void timestampCompleted(const std::string& filename, const std::string& hash_hex, uint64_t raw_time, const std::string& signature_hex) {
+void timestampCompleted(const std::string& filename, uint64_t raw_time) {
     std::cout << "\n" << BOLD_MAGENTA << "========================================" << RESET << "\n";
     std::cout << BOLD_MAGENTA << "           TIMESTAMP COMPLETED            " << RESET << "\n";
     std::cout << BOLD_MAGENTA << "========================================" << RESET << "\n";
@@ -66,15 +66,6 @@ void timestampCompleted(const std::string& filename, const std::string& hash_hex
     } catch (...) {
         std::cout << BOLD_CYAN << " Timestamp: " << RESET << raw_time << " (Raw)\n";
     }
-
-    std::cout << BOLD_CYAN << " Hash (SHA-256): " << RESET << hash_hex << "\n";
-    
-    std::string sig_display = signature_hex;
-    if (signature_hex.length() > 32) {
-        sig_display = signature_hex.substr(0, 16) + " ... " + signature_hex.substr(signature_hex.length() - 16);
-    }
-    std::cout << BOLD_CYAN << " Signature: " << RESET << sig_display << "\n";
-    
     std::cout << BOLD_MAGENTA << "========================================" << RESET << "\n";
 }
 

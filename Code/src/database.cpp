@@ -1,5 +1,7 @@
 #include "../header_files/database.h"
 #include "../header_files/crypto.h"
+#include "../header_files/interface.h"
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -30,7 +32,7 @@ bool UserDatabase::load_from_file(const string& filepath) {
         json j;
         file >> j;
         users = j["users"].get<vector<UserAccount>>();
-        cout << "[DB] Successfully loaded " << users.size() << " users." << endl;
+        cout << BOLD_GREEN << "[DB] Successfully loaded users." << RESET << endl;
         return true;
     } catch (const exception& e) {
         cerr << "[DB ERROR] JSON parsing error: " << e.what() << endl;
@@ -99,5 +101,5 @@ bool UserDatabase::consume_timestamp(const string& username) {
             return true;
         }
     }
-    return false; // User not found
+    return false;
 }

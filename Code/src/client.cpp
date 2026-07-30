@@ -224,7 +224,7 @@ vector<uint8_t> auth_response_payload;
     break;
 
     } else if (choice == "verify") {
-        userVerification(sock, aes_key);
+        userVerification();
 
     }else if (choice == "exit") {
     printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);
@@ -254,7 +254,7 @@ vector<uint8_t> auth_response_payload;
             getUserTimestamp( sock, aes_key, send_seq_num, recv_seq_num);
         }
         else if (choice == "verify") {
-            userVerification(sock, aes_key);
+            userVerification();
         } 
         else if (choice == "exit") {
             printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);

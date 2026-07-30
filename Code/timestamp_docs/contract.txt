@@ -1,0 +1,1 @@
+A timestamp provides proof that a specific block of digital data existed at a given point in time, allowing developers to audit log files, detect tampered records, and maintain a clear chronological history of all system operations.

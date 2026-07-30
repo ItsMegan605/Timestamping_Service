@@ -141,34 +141,23 @@ bool unpack_server_hello(const vector<uint8_t>& payload, vector<uint8_t>& out_ep
     out_ns.assign(payload.begin() + offset, payload.begin() + offset + NONCE_SIZE);
     offset += NONCE_SIZE;
 
-    size_t sig_len = payload.size() - offset;
     out_signature.assign(payload.begin() + offset, payload.end());
     
     return true;
 }
 
 // Serializes the authentication credentials.
-// Format: [2 bytes username len] + [username] + [2 bytes password len] + [password]
-
+// Format:  [username] + [password]
 vector<uint8_t> pack_auth_request(const AuthRequest& req) {
     vector<uint8_t> out;
 
-    uint16_t username_len = static_cast<uint16_t>(req.username.size());
-    uint16_t password_len = static_cast<uint16_t>(req.password.size());
-
-    uint16_t username_len_net = htons(username_len);
-    uint16_t password_len_net = htons(password_len);
-    
-    uint8_t len_bytes[2];
-    
     // Pack username
-    memcpy(len_bytes, &username_len_net, 2);
-    out.insert(out.end(), len_bytes, len_bytes + 2);
     out.insert(out.end(), req.username.begin(), req.username.end());
+    
+    // Insert the null-terminator byte as a delimiter
+    out.push_back('\0');
 
     // Pack password
-    memcpy(len_bytes, &password_len_net, 2);
-    out.insert(out.end(), len_bytes, len_bytes + 2);
     out.insert(out.end(), req.password.begin(), req.password.end());
     
     return out;
@@ -176,37 +165,32 @@ vector<uint8_t> pack_auth_request(const AuthRequest& req) {
 
 // Deserializes the authentication credentials, protecting against invalid lengths.
 bool unpack_auth_request(const vector<uint8_t>& payload, AuthRequest& out) {
-    if (payload.size() < 4) return false; 
+    // Prevent processing if the payload is empty
+    if (payload.empty()) return false; 
     
-    const uint16_t MAX_USERNAME_LEN = 64; 
-    const uint16_t MAX_PASSWORD_LEN = 128; 
+    const size_t MAX_USERNAME_LEN = 64; 
+    const size_t MAX_PASSWORD_LEN = 128; 
 
-    size_t offset = 0;
+    // Find the iterator pointing to the null-terminator '\0'
+    auto delimiter_it = find(payload.begin(), payload.end(), '\0');
 
-    // read username length
-    uint16_t username_len_net;
-    memcpy(&username_len_net, payload.data() + offset, 2);
-    offset += 2;
-    uint16_t username_len = ntohs(username_len_net);
+    // If no delimiter is found, the payload format is invalid
+    if (delimiter_it == payload.end()) return false;
 
+    // Calculate lengths based on the delimiter's position
+    size_t username_len = distance(payload.begin(), delimiter_it);
+    size_t password_len = distance(delimiter_it + 1, payload.end());
+
+    // Security boundary checks for field dimensions
     if (username_len == 0 || username_len > MAX_USERNAME_LEN) return false;
-    if (payload.size() < offset + username_len + 2) return false; 
-
-    // extract username
-    out.username.assign(payload.begin() + offset, payload.begin() + offset + username_len);
-    offset += username_len;
-
-    // read password length
-    uint16_t password_len_net;
-    memcpy(&password_len_net, payload.data() + offset, 2);
-    offset += 2;
-    uint16_t password_len = ntohs(password_len_net);
-
     if (password_len == 0 || password_len > MAX_PASSWORD_LEN) return false;
-    if (payload.size() < offset + password_len) return false;
 
-    // extract password
-    out.password.assign(payload.begin() + offset, payload.begin() + offset + password_len);
+    // Extract username (from the beginning up to the delimiter)
+    out.username.assign(payload.begin(), delimiter_it);
+    
+    // Extract password (from the byte immediately following the delimiter to the end)
+    out.password.assign(delimiter_it + 1, payload.end());
+
     return true;
 }
 
@@ -491,7 +475,7 @@ void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, uint64_t& send_s
     printBanner("Timestamp request submitted.", BOLD_CYAN);
     
     //getting the file name to timestamp
-    std::string filename;
+    string filename;
     cout << "Enter the name of the file you want to timestamp: ";
     cin >> filename;
 
@@ -517,8 +501,7 @@ void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, uint64_t& send_s
     string outputFolder = "../timestamped_docs";
     string fullPath = inputFolder + "/" + filename; 
     
-    // Estrai il nome pulito senza estensione anche per la fase di lettura
-    string baseNameVerify = std::filesystem::path(filename).stem().string();
+    string baseNameVerify = filesystem::path(filename).stem().string();
     string jsonFilePath = outputFolder + "/" + baseNameVerify + ".json";
     //HASH COMPUTATION
     array<uint8_t, 32> hash = sha256_file(fullPath); //shaof the local file
@@ -555,6 +538,11 @@ void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, uint64_t& send_s
     TimestampResponse resp;
     if (!unpack_timestamp_response(response_payload, resp)) {
         cerr << "[CLIENT ERROR] Invalid timestamp response format!" << endl;
+        return;
+    }
+
+    if( resp.status == Status::QUOTA_EXHAUSTED) {
+        printBanner("YOUR TIMESTAMPS ARE FINISHED: please recharge them", BOLD_RED);
         return;
     }
 
@@ -602,7 +590,7 @@ void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, uint64_t& send_s
             Signature += buf;
         }
         
-        timestampCompleted(filename, Hash_Value, resp.timestamp, Signature);
+        timestampCompleted(filename, resp.timestamp);
 
         //Build a JSON object to store the timestamp metadata persistently and save them
         json jsonTimestamp;
@@ -626,7 +614,7 @@ void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, uint64_t& send_s
         jsonFile << jsonTimestamp.dump(4);
         jsonFile.close();
         
-        cout << "[CLIENT] JSON information successfully saved in: " << jsonFilePath << endl;
+       //cout << "[CLIENT] JSON information successfully saved in: " << jsonFilePath << endl;
     } else {
         printBanner("[CLIENT ERROR] Timestamp VERIFICATION FAILED!", BOLD_RED);
     }
@@ -702,50 +690,67 @@ bool unpack_timestamp_response(const vector<uint8_t>& payload, TimestampResponse
 // Verification function - local within the service
 //------------------------------------------------------
 
-void userVerification(int sock, const vector<uint8_t>& aes_key) {
+void userVerification() {
 
     printBanner("Let's verify your timestamp.", BOLD_GREEN);
 
-    string fileToVerify;
-    cout << "Plase insert the name of the file that you want to verify: \n" << endl;
-    
-    cin >> fileToVerify;
+    string originalFile;
+    cout << BOLD_GREEN << "Please insert the name of the original file that you want to verify:\n" << RESET;
+    cin >> originalFile;
 
-    if (fileToVerify.empty()){
+    if (originalFile.empty()){
         cerr << "ERROR: the file is empty and cannot be verified." << endl;
         return;
     }
 
-    if (fileToVerify.find('/') != string::npos){
+    if (originalFile.find('/') != string::npos){
         cerr << "ERROR: please insert only the file name, not the path." << endl;
         return;
     }
 
-    if (fileToVerify.find('.') == string::npos) {
-        fileToVerify += ".txt";
+    if (originalFile.find('.') == string::npos) {
+        originalFile += ".txt";
     }
 
+    string jsonFile;
+    cout << BOLD_YELLOW << "Please insert the name of the timestamped file that you want to verify:\n" << RESET;
+    cin >> jsonFile;
+
+    if (jsonFile.empty()){
+        cerr << "ERROR: the file is empty and cannot be verified." << endl;
+        return;
+    }
+
+    if (jsonFile.find('/') != string::npos){
+        cerr << "ERROR: please insert only the file name, not the path." << endl;
+        return;
+    }
+
+    if (jsonFile.find('.') == string::npos) {
+        jsonFile += ".json";
+    }
 
     string inputFolder = "../timestamp_docs";
     string outputFolder = "../timestamped_docs";
-    string fullPath = inputFolder + "/" + fileToVerify; 
     
-    string baseNameVerify = std::filesystem::path(fileToVerify).stem().string();
-    string jsonFilePath = outputFolder + "/" + baseNameVerify + ".json";
+    string fullPath = inputFolder + "/" + originalFile; 
+    string jsonFilePath = outputFolder + "/" + jsonFile;
     
     cout << "Calculating the hash of the file..." << endl;
-
+    //hash calculation
     array<uint8_t, 32> currentHashFile = sha256_file(fullPath);
+    // Check if the hash is completely empty
     if (currentHashFile[0] == 0 && currentHashFile[1] == 0 && currentHashFile[2] == 0 && currentHashFile[3] == 0){
         cerr << "Error in finding or reading the file" << endl;
         return;
     }
     ifstream fileStream(jsonFilePath);
     if(!fileStream.is_open()) {
-        cerr << "the document hasn't been timestamped yet, sorry." << endl;
+        cerr << BOLD_RED << "The document hasn't been timestamped yet, sorry." << RESET << endl;
         return;
     }
-    //parsing json
+
+    //parsing json with the metadata
     json jsonTimestamp;
     try {
         fileStream >> jsonTimestamp;
@@ -756,9 +761,10 @@ void userVerification(int sock, const vector<uint8_t>& aes_key) {
     fileStream.close();
 
     string hash; //expected hash 
-    string time;
-    string signature;
+    string time; //timestamp recorded by the server
+    string signature; //signature provided by the server
 
+    //Extract the specific fields from the JSON object
     try{
         hash = jsonTimestamp.at("Hash Value").get<string>();
         time = jsonTimestamp.at("Timing").get<string>();
@@ -769,20 +775,24 @@ void userVerification(int sock, const vector<uint8_t>& aes_key) {
         return;
     }
 
+    //Convert the locally computed binary hash into a readable hexadecimal string
 char hexBuffer[65]; 
     for (int i = 0; i < 32; i++) {
         snprintf(&hexBuffer[i * 2], 3, "%02x", currentHashFile[i]); 
     }
     string currentHashHex(hexBuffer);
 
+    // Compare the local hash with the one stored in the JSON file.
+    // If they differ, the local file was modified after the timestamp was generated.
     if (currentHashHex != hash) {
         printBanner("THE FILE WAS MODIFIED: the current hash doesn't correspond with the original one!\n", BOLD_RED);
         return;
     } 
     
-    printBanner("The file was not altered, nice job mate. Proceeding with signature verification...", BOLD_GREEN);
+    printBanner("The file was not altered, now signature verification...", BOLD_GREEN);
     
-
+    //signature verification
+    //convert the hexadecimal signature string back into a raw binary format
     vector<uint8_t> signatureBinary;
     try {
         for (size_t i = 0; i < signature.length(); i += 2) {
@@ -792,18 +802,26 @@ char hexBuffer[65];
         cerr << "[CLIENT ERROR] Invalid signature format in JSON document." << endl;
         return;
     }
+    // Reconstruct the exact 40-byte payload that the server originally signed
     vector<uint8_t> dataToVerify(40);
+    // 1st part: Copy the 32-byte binary hash
     memcpy(dataToVerify.data(), currentHashFile.data(), 32); 
     
-    uint64_t ts_net = htobe64(stoull(time)); // Converte il tempo di nuovo in network byte order
-    memcpy(dataToVerify.data() + 32, &ts_net, 8); 
+    // 2nd part: Convert the timestamp string to a 64-bit integer, 
+    // then format it to Network Byte Order (Big-Endian) to match the server's formatting
+    uint64_t ts_net = htobe64(stoull(time)); 
+    
+    // Append the 8-byte timestamp right after the hash
+    memcpy(dataToVerify.data() + 32, &ts_net, 8);
 
+    // Load the server's public key required to verify the digital signature
     EVP_PKEY* ts_pubk = load_public_key("../keys/server_ts_pub.pem");
     if (!ts_pubk) {
         cerr << "Error: impossible to load the public key for verification." << endl;
         return;
     }
 
+    // Perform the cryptographic verification
     bool isValid = verify_signature(dataToVerify, signatureBinary, ts_pubk);
     EVP_PKEY_free(ts_pubk);
 
@@ -830,10 +848,10 @@ void printTimestampOf(const unsigned char* doc) {
     uint64_t host_timestamp = be64toh(raw_timestamp);
 
     // 2. Convertiamo i secondi in una time_point di tipo system_clock
-    std::chrono::seconds duration_secs(host_timestamp);
-    std::chrono::system_clock::time_point tp(duration_secs);
+    chrono::seconds duration_secs(host_timestamp);
+    chrono::system_clock::time_point tp(duration_secs);
     
     // 3. Formattiamo stampando l'orario locale usando C++20 chrono e zoned_time
-    auto local_time = std::chrono::zoned_time{chrono::current_zone(), tp};
-    std::cout << std::format("{:%Y-%m-%d %H:%M:%S}", local_time) << '\n';
+    auto local_time = chrono::zoned_time{chrono::current_zone(), tp};
+    cout << format("{:%Y-%m-%d %H:%M:%S}", local_time) << '\n';
 }

@@ -74,6 +74,6 @@ void getUserTimestamp(int sock, const vector<uint8_t>& aes_key, uint64_t& send_s
 vector<uint8_t> pack_timestamp_response(const TimestampResponse& res);
 bool unpack_timestamp_response(const vector<uint8_t>& data, TimestampResponse& out);
 
-void userVerification(int sock, const vector<uint8_t>& aes_key);
+void userVerification();
 
 #endif 
