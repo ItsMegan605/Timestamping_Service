@@ -6,6 +6,26 @@
 #define COMMON_H
 
 #include <cstdint>
+#include <sys/socket.h> 
+#include <netinet/in.h> 
+#include <arpa/inet.h>  
+#include <unistd.h> 
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <cstring>
+#include <thread>
+#include <chrono>
+#include <stdlib.h>
+#include <mutex>
+#include <vector>
+#include <fstream>
+#include <nlohmann/json.hpp>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+#include <openssl/pem.h>
+#include <openssl/kdf.h>
+#include <iostream>
 
 //Nw and server
 #define DEFAULT_PORT 8081

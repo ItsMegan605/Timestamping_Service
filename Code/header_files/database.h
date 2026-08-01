@@ -10,6 +10,7 @@
 #include <vector>
 #include <array>
 #include <nlohmann/json.hpp>
+#include <shared_mutex>
 
 
 using json = nlohmann::json;

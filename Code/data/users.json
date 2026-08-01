@@ -1,12 +1,20 @@
 {
     "users": [
         {
-            "consumed": 17,
+            "consumed": 15,
             "password_hash": "733b166ed1f583638af010a2fc8114ff3a5e2e73901d64dc99bc4758c4fe0590",
-            "remaining": 33,
+            "remaining": 35,
             "salt": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
             "total": 50,
             "username": "student"
+        },
+        {
+            "consumed": 7,
+            "password_hash": "c1d0234b77960979ca297c78d6fab90dd35e08d911d672a56fb07f9723e95598",
+            "remaining": 83,
+            "salt": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+            "total": 90,
+            "username": "alice"
         },
         {
             "consumed": 6,

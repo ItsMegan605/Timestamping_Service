@@ -21,7 +21,7 @@ EVP_PKEY* ts_privk = nullptr; // Server's timestamping private key
 
 void handle_client(int client_socket) {
 
-    printBanner("[SERVER] New client connection established.", BOLD_MAGENTA);
+    printBanner("[SERVER] New client connection request received.", BOLD_MAGENTA);
     
     // Load the server's long-term private key for signing the transcript
     EVP_PKEY* server_conn_priv = load_private_key("../keys/server_conn_priv.pem");
@@ -84,6 +84,7 @@ void handle_client(int client_socket) {
         return;
     }
 
+
     // ----- shared secret calculation ------
     vector<uint8_t> shared_secret;
     EVP_PKEY* peer_pub_key = deserialize_pubkey(epub_c);
@@ -121,41 +122,51 @@ void handle_client(int client_socket) {
     
 //----------------------- authentication phase -----------------------
     vector<uint8_t> authentication;
-    // 1. Ricezione sicura delle credenziali
-    if(!recv_secure_message(client_socket, authentication, aes_key, recv_seq_num)) {
-        cerr << "[SERVER ERROR] Error securely receiving authentication request" << endl;
-        close(client_socket);
-        return;
-    }
-
+    int max_tries = 3;
+    bool is_authenticated = false;
     AuthRequest authRequest;
-    if(unpack_auth_request(authentication, authRequest) != 1) {
-        cerr << "Error with the request format" << endl;
-        close(client_socket);
-        return;
-    }
 
-    AuthResponse authResponse;
-    bool is_authenticated = db.authenticate(authRequest.username, authRequest.password);
+    while(max_tries > 0) {
+        if(!recv_secure_message(client_socket, authentication, aes_key, recv_seq_num)) {
+            cerr << "[SERVER ERROR] Error securely receiving authentication request" << endl;
+            close(client_socket);
+            return;
+        }
 
-    if(is_authenticated){
-        printBanner("Authentication succesful!", BOLD_GREEN);
-        authResponse.status = Status::OK;
-    } else {
-        printBanner("Authentication failed", BOLD_RED);
-        authResponse.status = Status::AUTH_FAILED;
-    }
+        AuthRequest authRequest;
+        if(unpack_auth_request(authentication, authRequest) != 1) {
+            cerr << "Error with the request format" << endl;
+            close(client_socket);
+            return;
+        }
 
-    vector<uint8_t> authResponsePayload = pack_auth_response(authResponse);
-    
-    // 2. Invio sicuro della risposta 
-    if(!send_secure_message(client_socket, authResponsePayload, aes_key, send_seq_num)) {
-        cerr << "SERVER ERROR securely answering the request!!" << endl;
-        close(client_socket);
-        return;
+        AuthResponse authResponse;
+        is_authenticated = db.authenticate(authRequest.username, authRequest.password);
+
+        if(is_authenticated){
+            printBanner("Authentication succesful!", BOLD_GREEN);
+            authResponse.status = Status::OK;
+        } else {
+            printBanner("Authentication failed", BOLD_RED);
+            authResponse.status = Status::AUTH_FAILED;
+            max_tries--;
+        }
+
+        vector<uint8_t> authResponsePayload = pack_auth_response(authResponse);
+        
+        if(!send_secure_message(client_socket, authResponsePayload, aes_key, send_seq_num)) {
+            cerr << "SERVER ERROR securely answering the request!!" << endl;
+            close(client_socket);
+            return;
+        }
+
+        if (is_authenticated) {
+            break;
+        }
     }
 
     if (!is_authenticated) {
+        cerr << "[SERVER] User failed to authenticate after 3 tries. Closing connection." << endl;
         close(client_socket);
         return;
     }
@@ -257,6 +268,24 @@ void handle_client(int client_socket) {
 
 // --------------------- mian code --------------------------------------
 
+void threadListener (int port) {
+    int server_fd = setup_server(port);
+    if (server_fd < 0) 
+        return;
+    
+    cout << BOLD_TEAL << "[Server] Listening on port " << port << RESET << endl;
+    
+    while (1) {
+        struct sockaddr_in client_addr; 
+        socklen_t addr_len = sizeof(client_addr);
+        
+        int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &addr_len);
+        
+        if (client_fd >= 0) {
+            thread(handle_client, client_fd).detach();
+        }
+    }
+}
 int main() {
 
     if (!db.load_from_file("../data/users.json")) {
@@ -270,21 +299,7 @@ int main() {
         return EXIT_FAILURE;
     }   
     
-    int server_fd = setup_server(DEFAULT_PORT);
-    if (server_fd < 0) return EXIT_FAILURE;
-    
-    cout << BOLD_TEAL << "[Server] Listening on port " << DEFAULT_PORT << RESET << endl;
-    
-    while (1) {
-        struct sockaddr_in client_addr; 
-        socklen_t addr_len = sizeof(client_addr);
-        
-        // Accetta la connessione entrante
-        int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &addr_len);
-        
-        if (client_fd >= 0) {
-            handle_client(client_fd);
-        }
-}
+    jthread th_listener(threadListener, DEFAULT_PORT);
+    return EXIT_SUCCESS;
 
 }

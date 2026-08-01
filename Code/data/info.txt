@@ -2,3 +2,7 @@ primo user:
 
 username: student
 psw: passowrd
+
+secondi user:
+alice
+12345678

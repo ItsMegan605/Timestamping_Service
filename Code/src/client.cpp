@@ -156,118 +156,124 @@ EVP_PKEY_free(server_conn_pub);
         return EXIT_FAILURE;
     }
 
-    OPENSSL_cleanse(shared_secret.data(), shared_secret.size());
+OPENSSL_cleanse(shared_secret.data(), shared_secret.size());
 
-    printBanner("[CLIENT] Handshake completed! Secure channel active.", BOLD_GREEN);
-    
-    string username;
-    string password;
+printBanner("[CLIENT] Handshake completed! Secure channel active.", BOLD_GREEN);
 
-    cout << "Insert Username: \n";
-    cin >> username; 
-    
-    cout << "Insert Password: \n";
-    cin >> password;
+    bool is_authenticated = false;
+    int num_tries = 3;
 
+    while(num_tries > 0) {
+        string username;
+        string password;
 
-    if (username.empty() || password.empty()) {
-        cerr << "Error: username and password must not be empty" << endl;
-        close(sock);
-        return EXIT_FAILURE;
+        cout << "Insert Username: \n";
+        cin >> username; 
+        
+        cout << "Insert Password: \n";
+        cin >> password;
+
+        if (username.empty() || password.empty()) {
+            cerr << "Error: username and password must not be empty" << endl;
+            continue; 
+        }
+
+        AuthRequest auth_req;
+        auth_req.username = username;
+        auth_req.password = password;
+
+        vector<uint8_t> auth_payload = pack_auth_request(auth_req);
+
+        if (!send_secure_message(sock, auth_payload, aes_key, send_seq_num)) {
+            cerr << "Error securely sending authentication request" << endl;
+            close(sock);
+            return EXIT_FAILURE;
+        }
+
+        vector<uint8_t> auth_response_payload;
+        if (!recv_secure_message(sock, auth_response_payload, aes_key, recv_seq_num)) {
+            cerr << "Error securely receiving authentication response (possible MitM or Replay Attack)" << endl;
+            close(sock);
+            return EXIT_FAILURE;
+        }
+
+        AuthResponse auth_res;
+        if (unpack_auth_response(auth_response_payload, auth_res) != 1) {
+            cerr << "Invalid authentication response format from server" << endl;
+            close(sock);
+            return EXIT_FAILURE;
+        }
+
+        
+        if (auth_res.status != Status::OK) {
+            num_tries--; 
+            cerr << "[CLIENT] Login failed: invalid credentials. Tries remaining: " << num_tries << endl;
+            
+            fill(username.begin(), username.end(), '\0');
+            fill(password.begin(), password.end(), '\0');
+            
+            
+            continue; 
+        }
+        
+        is_authenticated = true;
+        fill(username.begin(), username.end(), '\0');
+        fill(password.begin(), password.end(), '\0');
+        
+        printBanner("Login was succesful, welcome to the service!", BOLD_GREEN);
+        break;  
     }
 
-    AuthRequest auth_req;
-    auth_req.username = username;
-    auth_req.password = password;
-
-    vector<uint8_t> auth_payload = pack_auth_request(auth_req);
-
-
-    if (!send_secure_message(sock, auth_payload, aes_key, send_seq_num)) {
-        cerr << "Error securely sending authentication request" << endl;
-        std::fill(username.begin(), username.end(), '\0');
-        std::fill(password.begin(), password.end(), '\0');
+    if (!is_authenticated) {
+        cerr << "[CLIENT] Failed to authenticate after 3 attempts. Closing connection." << endl;
         close(sock);
-        return EXIT_FAILURE;
+        return EXIT_FAILURE; 
     }
 
-vector<uint8_t> auth_response_payload;
-    if (!recv_secure_message(sock, auth_response_payload, aes_key, recv_seq_num)) {
-        cerr << "Error securely receiving authentication response (possible MitM or Replay Attack)" << endl;
-        std::fill(username.begin(), username.end(), '\0');
-        std::fill(password.begin(), password.end(), '\0');
-        close(sock);
-        return EXIT_FAILURE;
-    }
-
-    AuthResponse auth_res;
-    if (unpack_auth_response(auth_response_payload, auth_res) != 1) {
-        cerr << "Invalid authentication response format from server" << endl;
-        std::fill(username.begin(), username.end(), '\0');
-        std::fill(password.begin(), password.end(), '\0');
-        close(sock);
-        return EXIT_FAILURE;
-    }
-
-    if (auth_res.status != Status::OK) {
-        cerr << "[CLIENT] Login failed: invalid credentials" << endl;
-        std::fill(username.begin(), username.end(), '\0');
-        std::fill(password.begin(), password.end(), '\0');
-        close(sock);
-        continue;
-    }
-
-        std::fill(username.begin(), username.end(), '\0');
-        std::fill(password.begin(), password.end(), '\0');
-
-    printBanner("Login was succesful, welcome to the service!", BOLD_GREEN);
-    break;
+    break; 
 
     } else if (choice == "verify") {
         userVerification();
-
-    }else if (choice == "exit") {
-    printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);
-    vector<uint8_t> exit_payload = {'E'};
-    send_secure_message(sock, exit_payload, aes_key, send_seq_num);
-    close(sock);
-    return EXIT_SUCCESS; 
+    } else if (choice == "exit") {
+        printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);
+        return EXIT_SUCCESS; 
     } else {
         printBanner("Command not recognised, try again.", BOLD_RED);
     }
+} 
 
-}
-    
+
 // -------------------------------------------------------------------------
 // APPLICATION LOOP - effective funcitons called by user
 // -------------------------------------------------------------------------
 
-    while(true) {
-        homeMenu();
-        string choice;
-        cin >> choice;
-        
-        if (choice == "balance") {
-            getUserBalance(sock, aes_key, send_seq_num, recv_seq_num);
-        } 
-        else if (choice == "timestamp"){
-            getUserTimestamp( sock, aes_key, send_seq_num, recv_seq_num);
-        }
-        else if (choice == "verify") {
-            userVerification();
-        } 
-        else if (choice == "exit") {
-            printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);
-            vector<uint8_t> exit_payload = {'E'};
-            send_secure_message(sock, exit_payload, aes_key, send_seq_num); 
-            close(sock);
-            return EXIT_SUCCESS; 
-        }
-        else {
-            printBanner("Command not recognised, try again.", BOLD_RED);
-        }
-    }
+while(true) {
+    homeMenu();
+    string choice;
+    cin >> choice;
     
-    close(sock);
-    return EXIT_SUCCESS;
+    if (choice == "balance") {
+        getUserBalance(sock, aes_key, send_seq_num, recv_seq_num);
+    } 
+    else if (choice == "timestamp"){
+        getUserTimestamp( sock, aes_key, send_seq_num, recv_seq_num);
+    }
+    else if (choice == "verify") {
+        userVerification();
+    } 
+    else if (choice == "exit") {
+        printBanner("Thank you for using our service, see you soon!", BOLD_BLUE);
+        vector<uint8_t> exit_payload = {'E'};
+        send_secure_message(sock, exit_payload, aes_key, send_seq_num); 
+        close(sock);
+        return EXIT_SUCCESS; 
+    }
+    else {
+        printBanner("Command not recognised, try again.", BOLD_RED);
+    }
 }
+
+close(sock);
+return EXIT_SUCCESS;
+
+} 
