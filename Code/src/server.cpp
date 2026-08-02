@@ -133,7 +133,7 @@ void handle_client(int client_socket) {
             return;
         }
 
-        AuthRequest authRequest;
+        //AuthRequest authRequest;
         if(unpack_auth_request(authentication, authRequest) != 1) {
             cerr << "Error with the request format" << endl;
             close(client_socket);
